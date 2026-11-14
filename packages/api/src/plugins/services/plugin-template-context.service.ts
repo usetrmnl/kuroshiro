@@ -170,6 +170,11 @@ function oauthPollOf(plugin: Plugin, settings: OAuthSettings, unsaved: UnsavedPl
  * root too (ADR-0049). The data wins over a bare Field Value key of the same
  * name; nothing replaces `trmnl` or `sensors`.
  */
+/** The `sensors` object of a render (ADR-0018): a reading per kind the Device currently reports. */
+export function sensorsByKind(sensors: DeviceSensor[]): PluginTemplateContext['sensors'] {
+  return Object.fromEntries(sensors.map(sensor => [sensor.kind, { value: sensor.value, unit: sensor.unit }]))
+}
+
 @Injectable()
 export class PluginTemplateContextService {
   constructor(
@@ -245,7 +250,7 @@ export class PluginTemplateContextService {
         },
         state,
       },
-      sensors: Object.fromEntries(sensors.map(sensor => [sensor.kind, { value: sensor.value, unit: sensor.unit }])),
+      sensors: sensorsByKind(sensors),
     }
   }
 }

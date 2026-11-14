@@ -1,9 +1,11 @@
 import type { DeviceModelsService } from '../../device-models/device-models.service.js'
+import type { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
 import type { MashupSlot } from '../../mashup/entities/mashup-slot.entity.js'
 import type { Screen } from '../../screens/screens.entity.js'
 import type { PluginRendererService } from '../services/plugin-renderer.service.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { makeDevice, makeMashupConfiguration, makeMashupSlot, makePlugin, makePluginTemplate, makeScreen } from '../../test/fixtures.js'
+import { createMockDeviceSensorsService, primeMockDeviceSensorsService } from '../../device-sensors/__test__/mockDeviceSensorsService.js'
+import { makeDevice, makeDeviceSensor, makeMashupConfiguration, makeMashupSlot, makePlugin, makePluginTemplate, makeScreen } from '../../test/fixtures.js'
 import { createMockDeviceModelsService, primeMockDeviceModelsServiceWithAssignedModels, V2 } from '../../test/mockDeviceModelsService.js'
 import { asRepository, createMockRepository } from '../../test/mockRepository.js'
 import { asService, injectPrivate } from '../../test/mockService.js'
@@ -12,6 +14,7 @@ import { PluginRenderCacheService } from '../services/plugin-render-cache.servic
 describe('pluginRenderCacheService', () => {
   let service: PluginRenderCacheService
   let mockRenderer: { render: ReturnType<typeof vi.fn> }
+  let sensors: ReturnType<typeof createMockDeviceSensorsService>
   let mockScreenRepo: ReturnType<typeof createMockRepository<Screen>> & { manager: { getRepository: ReturnType<typeof vi.fn> } }
   let mockMashupSlotRepo: ReturnType<typeof createMockRepository<MashupSlot>>
 
@@ -37,7 +40,9 @@ describe('pluginRenderCacheService', () => {
 
     mockScreenRepo.find.mockResolvedValue([kitchen, hallway])
 
-    service = new PluginRenderCacheService(asService<PluginRendererService>(mockRenderer), asRepository(mockScreenRepo), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())))
+    sensors = createMockDeviceSensorsService()
+    primeMockDeviceSensorsService(sensors)
+    service = new PluginRenderCacheService(asService<PluginRendererService>(mockRenderer), asRepository(mockScreenRepo), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), asService<DeviceSensorsService>(sensors))
   })
 
   const deviceOfEachRender = () => mockRenderer.render.mock.calls.map(([, context]) => context.trmnl?.device)
@@ -54,6 +59,19 @@ describe('pluginRenderCacheService', () => {
     ])
     expect(mockScreenRepo.update).toHaveBeenCalledWith('screen-kitchen', expect.objectContaining({ cachedPluginOutput: '<div>KITCHEN</div>', renderSignal: null }))
     expect(mockScreenRepo.update).toHaveBeenCalledWith('screen-hallway', expect.objectContaining({ cachedPluginOutput: '<div>HALLWAY</div>', renderSignal: null }))
+  })
+
+  it('lays each Screen\'s own Device\'s Sensors on its render, and none where the Plugin is on no Screen', async () => {
+    sensors.findForDevice.mockImplementation(async (deviceId: string) => deviceId === 'device-kitchen' ? [makeDeviceSensor({ kind: 'temperature', value: 21.5, unit: 'C' })] : [])
+
+    await service.renderAndCache(plugin, { data: 'hello', sensors: {}, trmnl: {} })
+
+    expect(mockRenderer.render.mock.calls.map(([, context]) => context.sensors)).toEqual([{ temperature: { value: 21.5, unit: 'C' } }, {}])
+
+    mockRenderer.render.mockClear()
+    mockScreenRepo.find.mockResolvedValue([])
+    await service.renderAndCache(plugin, { data: 'hello', sensors: {} })
+    expect(mockRenderer.render).toHaveBeenCalledExactlyOnceWith('{{ data }}', { data: 'hello', sensors: {} })
   })
 
   it('renders a Plugin on no Screen once, told no Device, and caches nothing', async () => {
