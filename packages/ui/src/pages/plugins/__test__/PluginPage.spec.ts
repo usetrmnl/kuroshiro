@@ -148,7 +148,7 @@ describe('the Plugin page', () => {
     })
 
     describe('the Framework Version', () => {
-      const versionField = (screen: Mounted) => screen.getByRole('textbox', { name: /Framework version/ })
+      const versionField = (screen: Mounted) => screen.getByLabelText(/Framework version/)
 
       it('saves a valid version with the form, and empty as null', async () => {
         const faked = fakePlugin(buildPluginDetail({ id: 'weather', frameworkVersion: '3.3.1' }))
