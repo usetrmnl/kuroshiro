@@ -159,6 +159,11 @@ function oauthPollOf(plugin: Plugin, settings: OAuthSettings, unsaved: UnsavedPl
   return { pluginId: tokensUnsaved ? undefined : plugin.id, settings }
 }
 
+/** The `sensors` object of a render (ADR-0018): a reading per kind the Device currently reports. */
+export function sensorsByKind(sensors: DeviceSensor[]): PluginTemplateContext['sensors'] {
+  return Object.fromEntries(sensors.map(sensor => [sensor.kind, { value: sensor.value, unit: sensor.unit }]))
+}
+
 /**
  * The Liquid context of every render of a Plugin, and of the preview's data:
  * its resolved Field Values, both under `trmnl.plugin_settings.custom_fields_values`
@@ -170,11 +175,6 @@ function oauthPollOf(plugin: Plugin, settings: OAuthSettings, unsaved: UnsavedPl
  * root too (ADR-0049). The data wins over a bare Field Value key of the same
  * name; nothing replaces `trmnl` or `sensors`.
  */
-/** The `sensors` object of a render (ADR-0018): a reading per kind the Device currently reports. */
-export function sensorsByKind(sensors: DeviceSensor[]): PluginTemplateContext['sensors'] {
-  return Object.fromEntries(sensors.map(sensor => [sensor.kind, { value: sensor.value, unit: sensor.unit }]))
-}
-
 @Injectable()
 export class PluginTemplateContextService {
   constructor(
