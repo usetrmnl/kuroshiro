@@ -231,7 +231,7 @@ export async function convertBlankToPng(outputPath: string, target: DeviceRender
  * same Palette. The regions travel through the same geometry as the image as a
  * black-and-white mask.
  */
-function regionDitherArgs(target: DeviceRenderTarget, regions: PixelRegion[], undithered: PaletteOperators, dithered: PaletteOperators): string[] {
+function regionDitherArgs(target: DeviceRenderTarget, regions: PixelRegion[], undithered: PaletteOperators, ditheredOperators: string[]): string[] {
   const { width, height } = target.model
   const rectangles = regions.flatMap(({ x, y, width: w, height: h }) => ['-draw', `rectangle ${x},${y} ${x + w - 1},${y + h - 1}`])
   return [
@@ -244,7 +244,7 @@ function regionDitherArgs(target: DeviceRenderTarget, regions: PixelRegion[], un
     ')',
     '(',
     'mpr:source',
-    ...dithered.operators,
+    ...ditheredOperators,
     ')',
     '(',
     '-size',
@@ -274,7 +274,7 @@ export async function convertToPng(inputPath: string, outputPath: string, target
   const undithered = await paletteOperators(target.palette, dither, colormapFor)
   const regions = !dither && paletteConversion(target.palette).kind !== 'full-color' ? ditherRegions : []
   const palette = regions.length > 0
-    ? regionDitherArgs(target, regions, undithered, await paletteOperators(target.palette, true, colormapFor))
+    ? regionDitherArgs(target, regions, undithered, (await paletteOperators(target.palette, true, colormapFor)).operators)
     : [...undithered.operators, ...undithered.output]
 
   const args = [
