@@ -35,6 +35,8 @@ export interface AlertSummary {
   plugin: { id: string, name: string } | null
   dataSource: { id: string, name: string } | null
   openedAt: string
+  /** When the last Reminder re-announced the Alert, or null if none has (ADR-0048). */
+  remindedAt: string | null
   resolvedAt: string | null
   details: AlertDetails | null
 }

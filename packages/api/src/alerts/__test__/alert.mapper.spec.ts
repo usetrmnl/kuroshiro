@@ -14,6 +14,7 @@ describe('toAlertSummary', () => {
       plugin: null,
       dataSource: null,
       openedAt: alert.openedAt.toISOString(),
+      remindedAt: null,
       resolvedAt: null,
       details: { lastSeen: 'x' },
     })
@@ -30,6 +31,7 @@ describe('toAlertSummary', () => {
       plugin: { id: 'plugin-1', name: 'Weather Dashboard' },
       dataSource: { id: 'ds-1', name: 'Weather API' },
       openedAt: alert.openedAt.toISOString(),
+      remindedAt: null,
       resolvedAt: null,
       details: { streak: 3, lastError: 'timeout' },
     })

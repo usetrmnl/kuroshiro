@@ -35,6 +35,7 @@ describe('alertsService', () => {
         plugin: null,
         dataSource: null,
         openedAt: active.openedAt.toISOString(),
+        remindedAt: null,
         resolvedAt: null,
         details: { lastSeen: 'x' },
       }])
@@ -45,6 +46,7 @@ describe('alertsService', () => {
         plugin: null,
         dataSource: null,
         openedAt: resolved.openedAt.toISOString(),
+        remindedAt: null,
         resolvedAt: '2026-01-02T00:00:00.000Z',
         details: null,
       }])
@@ -73,6 +75,7 @@ describe('alertsService', () => {
         plugin: { id: 'plugin-1', name: 'Weather Dashboard' },
         dataSource: { id: 'ds-1', name: 'Weather API' },
         openedAt: active.openedAt.toISOString(),
+        remindedAt: null,
         resolvedAt: null,
         details: { streak: 3, lastError: 'timeout' },
       }])

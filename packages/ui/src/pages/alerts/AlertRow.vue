@@ -5,7 +5,7 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import SentenceLine from '@/pages/devices/SentenceLine.vue'
 import { FIRING_ALERT_LABELS, RESOLVED_ALERT_LABELS } from './alertLabels'
-import { alertSubject, alertWhy, firedFor, sinceWhen } from './alertWording'
+import { alertSubject, alertWhy, firedFor, remindedWhen, sinceWhen } from './alertWording'
 
 const props = defineProps<{
   alert: AlertSummary
@@ -17,6 +17,7 @@ const label = computed(() => (firing.value ? FIRING_ALERT_LABELS : RESOLVED_ALER
 const subject = computed(() => alertSubject(props.alert))
 const why = computed(() => alertWhy(props.alert, props.told))
 const when = computed(() => firing.value ? sinceWhen(props.alert.openedAt, props.told.now) : firedFor(props.alert, props.told.now))
+const reminded = computed(() => firing.value ? remindedWhen(props.alert.remindedAt, props.told.now) : undefined)
 </script>
 
 <template>
@@ -32,6 +33,10 @@ const when = computed(() => firing.value ? sinceWhen(props.alert.openedAt, props
     <SentenceLine class="why" :sentence="why" />
     <p class="when">
       <time :datetime="alert.openedAt">{{ when }}</time>
+      <template v-if="reminded && alert.remindedAt">
+        ·
+        <time class="reminded" :datetime="alert.remindedAt">{{ reminded }}</time>
+      </template>
     </p>
   </li>
 </template>
