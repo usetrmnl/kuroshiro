@@ -40,6 +40,11 @@ export function listRecipeCategories() {
   return apiGet<string[]>('recipes/categories')
 }
 
+/** The TRMNL Framework versions TRMNL has released, newest first; none when GitHub could not be asked. */
+export function listFrameworkVersions() {
+  return apiGet<string[]>('framework-versions')
+}
+
 /** Imports the Plugin a `.zip` holds. Refused with `import-not-zip`, `import-no-plugin`, `import-legacy-format`, `upload-too-large` or `zip-unpacks-too-large`. */
 export function importPluginFile(file: File, deviceId?: string) {
   const form = new FormData()

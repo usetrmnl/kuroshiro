@@ -13,11 +13,13 @@ import { PluginFieldValue } from './entities/plugin-field-value.entity.js'
 import { PluginField } from './entities/plugin-field.entity.js'
 import { PluginTemplate } from './entities/plugin-template.entity.js'
 import { Plugin } from './entities/plugin.entity.js'
+import { FrameworkVersionsController } from './framework-versions.controller.js'
 import { WebhookPluginGuard } from './guards/webhook-plugin.guard.js'
 import { PluginsController } from './plugins.controller.js'
 import { PluginsService } from './plugins.service.js'
 import { RecipeGalleryController } from './recipe-gallery.controller.js'
 import { DataSourceFetchOutcomeService } from './services/data-source-fetch-outcome.service.js'
+import { FrameworkVersionsService } from './services/framework-versions.service.js'
 import { PluginAssignmentsService } from './services/plugin-assignments.service.js'
 import { PluginDataFetcherService } from './services/plugin-data-fetcher.service.js'
 import { PluginDataResolverService } from './services/plugin-data-resolver.service.js'
@@ -57,7 +59,7 @@ import { WebhookIngestController } from './webhook-ingest.controller.js'
       Alert,
     ]),
   ],
-  controllers: [PluginsController, RecipeGalleryController, WebhookIngestController],
+  controllers: [PluginsController, FrameworkVersionsController, RecipeGalleryController, WebhookIngestController],
   providers: [
     PluginsService,
     PluginReadsService,
@@ -77,6 +79,7 @@ import { WebhookIngestController } from './webhook-ingest.controller.js'
     PluginTemplateContextService,
     PluginFieldValuesService,
     PluginRefreshService,
+    FrameworkVersionsService,
     RecipeGalleryService,
     RecipeUpdateService,
     WebhookIngestService,

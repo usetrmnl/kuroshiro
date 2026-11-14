@@ -1,5 +1,6 @@
 import type { PluginArrival } from '../pluginArrival'
 import type { Mounted } from './pluginPageHarness'
+import { TRMNL_FRAMEWORK_VERSION } from 'kuroshiro-shared'
 import { delay, http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { expectAccessible } from '@/testing/a11y'
@@ -13,7 +14,7 @@ import { freezeTime } from '@/testing/time'
 import { holdTabVisible } from '@/testing/visibility'
 import { openPluginPage } from '../pluginArrival'
 import StandInPluginPage from './examples/StandInPluginPage.vue'
-import { catchDownloads, clock, fakePlugin, mountPlugin, NOW, refresh, saveBar, WEATHER } from './pluginPageHarness'
+import { catchDownloads, clock, fakePlugin, mountPlugin, NOW, refresh, RELEASED_VERSIONS, saveBar, WEATHER } from './pluginPageHarness'
 
 const SOURCE = WEATHER.dataSources[0]!
 
@@ -147,7 +148,7 @@ describe('the Plugin page', () => {
     })
 
     describe('the Framework Version', () => {
-      const versionField = (screen: Mounted) => screen.getByRole('textbox', { name: /Framework version/ })
+      const versionField = (screen: Mounted) => screen.getByLabelText(/Framework version/)
 
       it('saves a valid version with the form, and empty as null', async () => {
         const faked = fakePlugin(buildPluginDetail({ id: 'weather', frameworkVersion: '3.3.1' }))
@@ -162,6 +163,33 @@ describe('the Plugin page', () => {
         await versionField(screen).fill('')
         await saveBar(screen).getByRole('button', { name: 'Save Plugin' }).click()
         await expect.poll(() => faked.saves.at(-1)).toEqual({ frameworkVersion: null })
+      })
+
+      it('offers the released versions, marking the one this Instance pins, and still takes a typed one', async () => {
+        const faked = fakePlugin()
+        const screen = await mountPlugin()
+
+        await openNaming(screen)
+        await expect.poll(() => versionField(screen).element().getAttribute('list')).toBeTruthy()
+        const options = [...document.querySelectorAll<HTMLOptionElement>(`#${versionField(screen).element().getAttribute('list')} option`)]
+        expect(options.map(option => option.value)).toEqual([...new Set([TRMNL_FRAMEWORK_VERSION, ...RELEASED_VERSIONS])])
+        expect(options.find(option => option.label.includes('this Instance'))?.value).toBe(TRMNL_FRAMEWORK_VERSION)
+
+        await versionField(screen).fill('3.0.0')
+        await saveBar(screen).getByRole('button', { name: 'Save Plugin' }).click()
+        await expect.poll(() => faked.saves).toEqual([{ frameworkVersion: '3.0.0' }])
+      })
+
+      it('is a plain text box, with no error, when the list cannot be read', async () => {
+        fakePlugin()
+        api.use(http.get(apiUrl('framework-versions'), () => apiErrorResponse({ statusCode: 502, code: 'upstream-unreachable' })))
+        const screen = await mountPlugin()
+
+        await openNaming(screen)
+        await expect.element(versionField(screen)).toBeVisible()
+        expect(versionField(screen).element().getAttribute('list')).toBeNull()
+        expect(document.querySelector('datalist')).toBeNull()
+        await expect.element(screen.getByRole('alert')).not.toBeInTheDocument()
       })
 
       it.each(['latest', '3.4', 'v3.4.0'])('refuses %s with the format and saves nothing', async (value) => {
