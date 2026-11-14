@@ -40,12 +40,19 @@ function versionsOf(body: unknown): string[] {
 @Injectable()
 export class FrameworkVersionsService {
   private readonly logger = new Logger(FrameworkVersionsService.name)
+  private reading: Promise<string[]> | null = null
   private held: { versions: string[], until: number } | null = null
 
   /** Newest first; none when GitHub could not be asked, and the Plugin's field stays a text box. */
   async versions(): Promise<string[]> {
     if (this.held && Date.now() < this.held.until)
       return this.held.versions
+    // Readers arriving while a read is under way share it, so a cold cache costs GitHub one request.
+    this.reading ??= this.read().finally(() => (this.reading = null))
+    return this.reading
+  }
+
+  private async read(): Promise<string[]> {
     try {
       const { status, ok, buffer } = await downloadLimited(RELEASES_URL, { limitBytes: READ_LIMIT_BYTES, timeoutMs: FETCH_TIMEOUT_MS })
       if (!ok)

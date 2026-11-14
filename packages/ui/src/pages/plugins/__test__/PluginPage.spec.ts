@@ -172,7 +172,7 @@ describe('the Plugin page', () => {
         await openNaming(screen)
         await expect.poll(() => versionField(screen).element().getAttribute('list')).toBeTruthy()
         const options = [...document.querySelectorAll<HTMLOptionElement>(`#${versionField(screen).element().getAttribute('list')} option`)]
-        expect(options.map(option => option.value)).toEqual(RELEASED_VERSIONS)
+        expect(options.map(option => option.value)).toEqual([...new Set([TRMNL_FRAMEWORK_VERSION, ...RELEASED_VERSIONS])])
         expect(options.find(option => option.label.includes('this Instance'))?.value).toBe(TRMNL_FRAMEWORK_VERSION)
 
         await versionField(screen).fill('3.0.0')

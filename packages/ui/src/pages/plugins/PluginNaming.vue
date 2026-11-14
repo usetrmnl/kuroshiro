@@ -19,10 +19,14 @@ const naming = usePluginFormPart(pluginNaming, () => (open.value = true))
 // A suggestion, nothing more: when the list cannot be read the field is the text box it always was, with no error shown.
 const released = useLoad(listFrameworkVersions)
 const versionListId = fieldId('frameworkVersionList')
-const suggestions = computed(() => (released.data ?? []).map(version => ({
-  version,
-  label: version === TRMNL_FRAMEWORK_VERSION ? `${version}, this Instance's` : version,
-})))
+// The Instance's own version is always offered, marked, even when the release list lacks it.
+const suggestions = computed(() => (released.data ?? []).length === 0
+  ? []
+  : [...new Set([TRMNL_FRAMEWORK_VERSION, ...released.data ?? []])].map(version => ({
+      version,
+      label: version === TRMNL_FRAMEWORK_VERSION ? `${version}, this Instance's` : version,
+    })))
+const hasSuggestions = computed(() => suggestions.value.length > 0)
 </script>
 
 <template>
@@ -45,10 +49,10 @@ const suggestions = computed(() => (released.data ?? []).map(version => ({
           <TextInput
             v-model="naming.draft.frameworkVersion"
             v-bind="control"
-            :list="suggestions.length > 0 ? versionListId : undefined"
+            :list="hasSuggestions ? versionListId : undefined"
             :placeholder="`${TRMNL_FRAMEWORK_VERSION}, this Instance's`"
           />
-          <datalist v-if="suggestions.length > 0" :id="versionListId">
+          <datalist v-if="hasSuggestions" :id="versionListId">
             <option v-for="suggestion in suggestions" :key="suggestion.version" :value="suggestion.version" :label="suggestion.label" />
           </datalist>
         </template>

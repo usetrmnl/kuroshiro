@@ -21,4 +21,4 @@ The screen shell loaded TRMNL's framework CSS and JS from `usetrmnl.com/{css,js}
 - The Plugin gains a nullable `frameworkVersion` column via migration.
 - The shell takes the version as an input instead of reading a constant; the Instance pin remains one constant in `packages/shared`, which is what the Renovate manager rewrites.
 - An Instance running an older Kuroshiro release keeps the version it shipped with until it is updated.
-- Additive follow-ups: listing known versions in the Plugin's field from TRMNL's release manifest, per-Plugin versions inside a Mashup if TRMNL ever scopes the framework per slot.
+- Additive follow-ups: listing known versions in the Plugin's field (done: `GET /api/framework-versions` reads the `usetrmnl/trmnl-framework` GitHub releases, held in memory for an hour, and the field suggests them without ever refusing a version outside the list), per-Plugin versions inside a Mashup if TRMNL ever scopes the framework per slot.

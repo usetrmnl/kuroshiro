@@ -34,6 +34,14 @@ describe('the Framework versions', () => {
     expect(String(mockFetch.mock.calls[0][0])).toContain('https://api.github.com/repos/usetrmnl/trmnl-framework/releases')
   })
 
+  it('asks GitHub once for readers who arrive together', async () => {
+    mockFetch.mockImplementation(async () => jsonResponse(RELEASES))
+
+    await Promise.all([service.versions(), service.versions()])
+
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+
   it('holds them in memory for an hour', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     mockFetch.mockImplementation(async () => jsonResponse(RELEASES))
