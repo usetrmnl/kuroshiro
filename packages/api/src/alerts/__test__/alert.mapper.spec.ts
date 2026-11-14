@@ -37,6 +37,12 @@ describe('toAlertSummary', () => {
     })
   })
 
+  it('resolves a remindedAt to an ISO string', () => {
+    const alert = makeAlert({ device: makeDevice({ id: 'device-1' }), remindedAt: new Date('2026-01-03T00:00:00.000Z') })
+
+    expect(toAlertSummary(alert)?.remindedAt).toBe('2026-01-03T00:00:00.000Z')
+  })
+
   it('resolves a resolvedAt and a details-less Alert', () => {
     const device = makeDevice({ id: 'device-1', name: 'Living Room' })
     const alert = makeAlert({ device, resolvedAt: new Date('2026-01-02T00:00:00.000Z'), details: undefined })

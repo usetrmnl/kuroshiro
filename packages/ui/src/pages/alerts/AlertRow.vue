@@ -33,9 +33,9 @@ const reminded = computed(() => firing.value ? remindedWhen(props.alert.reminded
     <SentenceLine class="why" :sentence="why" />
     <p class="when">
       <time :datetime="alert.openedAt">{{ when }}</time>
-      <template v-if="reminded && alert.remindedAt">
+      <template v-if="reminded">
         ·
-        <time class="reminded" :datetime="alert.remindedAt">{{ reminded }}</time>
+        <time class="reminded" :datetime="alert.remindedAt ?? undefined">{{ reminded }}</time>
       </template>
     </p>
   </li>
