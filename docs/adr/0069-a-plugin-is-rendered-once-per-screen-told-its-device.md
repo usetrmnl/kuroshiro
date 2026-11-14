@@ -10,7 +10,7 @@ The maintainer settled it, against the two cheaper options in the issue, because
 - A Plugin on no Screen is still rendered once, without a Device, so a scheduled render still reports a broken Template.
 - `trmnl.device` is laid on after the fetch, so a Data Source's URL, headers and body never read it: one fetch serves every Screen. A polling URL that names `{{ trmnl.device.friendly_id }}` renders it empty.
 - `wifi_strength` is left out: Kuroshiro stores the raw RSSI and has no TRMNL-equal way to read it as a percentage. A key the Device has not reported or set is left out too, so the template's `default` applies.
-- `sensors` stay empty on the Plugin's own Screen, as before (#1121); rendering per Screen would allow the Device's own, which is left for its own issue.
+- `sensors` on a Screen are its own Device's current Sensors, read at the tick and cached with the output like `trmnl.device` (#1782); the Plugin's render for no Device keeps them empty.
 
 ## Considered options
 

@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm'
 import { templateProblemOf } from 'kuroshiro-shared'
 import { Repository } from 'typeorm'
 import { DeviceModelsService } from '../../device-models/device-models.service.js'
+import { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { getErrorMessage } from '../../utils/getErrorMessage.js'
 import { templateOfSize } from '../plugin-templates.js'
@@ -34,6 +35,7 @@ export class PluginRenderCacheService {
     @InjectRepository(Screen)
     private readonly screenRepository: Repository<Screen>,
     private readonly deviceModels: DeviceModelsService,
+    private readonly deviceSensors: DeviceSensorsService,
   ) {
     // Lazy injection to avoid circular dependency
     setTimeout(() => {
@@ -49,7 +51,7 @@ export class PluginRenderCacheService {
   /**
    * Renders the `full` Template, the one a Screen on its own shows, once per
    * Screen of the Plugin from the same data, each told its own Device as
-   * `trmnl.device` (ADR-0069), and caches each output to its Screen. Every
+   * `trmnl.device` (ADR-0069) and laid with that Device's current Sensors, and caches each output to its Screen. Every
    * Screen is rendered before the first is written, so a Template that fails
    * for one caches nothing, and `isSuperseded` is asked once more before the
    * first write, so a render a newer one has overtaken writes nothing. A
@@ -71,7 +73,7 @@ export class PluginRenderCacheService {
 
     const rendered: Array<{ screen: Screen, html: string }> = []
     for (const screen of screens)
-      rendered.push({ screen, html: await render(await withTrmnlDevice(context, screen.device, this.deviceModels)) })
+      rendered.push({ screen, html: await render(await withTrmnlDevice(context, screen.device, this.deviceModels, await this.deviceSensors.findForDevice(screen.device.id))) })
 
     if (isSuperseded?.())
       return
