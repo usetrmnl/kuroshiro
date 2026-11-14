@@ -1,18 +1,28 @@
 <script setup lang="ts">
 import { TRMNL_FRAMEWORK_VERSION } from 'kuroshiro-shared'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { listFrameworkVersions } from '@/api/plugins'
 import Field from '@/components/Field.vue'
 import Switch from '@/components/Switch.vue'
 import Textarea from '@/components/Textarea.vue'
 import TextInput from '@/components/TextInput.vue'
 import TuckedSection from '@/components/TuckedSection.vue'
 import DitheringField from '@/patterns/DitheringField.vue'
+import { useLoad } from '@/patterns/useLoad'
 import { pluginNaming } from './pluginNaming'
 import { fieldId, usePluginFormPart } from './pluginPage'
 
 const open = ref(false)
 
 const naming = usePluginFormPart(pluginNaming, () => (open.value = true))
+
+// A suggestion, nothing more: when the list cannot be read the field is the text box it always was, with no error shown.
+const released = useLoad(listFrameworkVersions)
+const versionListId = fieldId('frameworkVersionList')
+const suggestions = computed(() => (released.data ?? []).map(version => ({
+  version,
+  label: version === TRMNL_FRAMEWORK_VERSION ? `${version}, this Instance's` : version,
+})))
 </script>
 
 <template>
@@ -32,7 +42,15 @@ const naming = usePluginFormPart(pluginNaming, () => (open.value = true))
       </Field>
       <Field :id="fieldId('frameworkVersion')" label="Framework version" optional :error="naming.errors.frameworkVersion">
         <template #default="{ control }">
-          <TextInput v-model="naming.draft.frameworkVersion" v-bind="control" :placeholder="`${TRMNL_FRAMEWORK_VERSION}, this Instance's`" />
+          <TextInput
+            v-model="naming.draft.frameworkVersion"
+            v-bind="control"
+            :list="suggestions.length > 0 ? versionListId : undefined"
+            :placeholder="`${TRMNL_FRAMEWORK_VERSION}, this Instance's`"
+          />
+          <datalist v-if="suggestions.length > 0" :id="versionListId">
+            <option v-for="suggestion in suggestions" :key="suggestion.version" :value="suggestion.version" :label="suggestion.label" />
+          </datalist>
         </template>
         <template #hint>
           Leave empty to follow this Instance's version. TRMNL lists its versions under
