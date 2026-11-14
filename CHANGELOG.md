@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.24.0](https://github.com/usetrmnl/kuroshiro/compare/kuroshiro-v0.23.1...kuroshiro-v0.24.0) (2026-11-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** `crypto.subtle` is no longer in a transform's reach. A transform that names it now fails where it used to run. Nothing else of ADR-0055's nineteen globals is withdrawn.
+
+### Features
+
+* **api:** build a transform's web globals inside its sandbox ([#1777](https://github.com/usetrmnl/kuroshiro/issues/1777)) ([bdaf015](https://github.com/usetrmnl/kuroshiro/commit/bdaf015806a6cff9ce5909d330e036e52e15e6a4)), closes [#1750](https://github.com/usetrmnl/kuroshiro/issues/1750)
+
 ## [0.23.1](https://github.com/usetrmnl/kuroshiro/compare/kuroshiro-v0.23.0...kuroshiro-v0.23.1) (2026-11-13)
 
 
