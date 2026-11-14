@@ -116,28 +116,54 @@ async function ensureColormap(palette: Palette, colors: string[], logger: Logger
   return colormapPath
 }
 
+/** A box in the source image's pixels, whole-pixel edges. */
+export interface PixelRegion {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface ConversionOptions {
   /** Off for pure ink-and-paper artwork, whose edges Floyd-Steinberg would fray. */
   dither?: boolean
+  /**
+   * Boxes of the source image dithered even though `dither` is off (TRMNL's
+   * `image-dither` class). Ignored when the whole image is dithered already or
+   * the Palette keeps full colour.
+   */
+  ditherRegions?: PixelRegion[]
 }
 
-async function paletteOperators(palette: Palette, { dither = true }: ConversionOptions, logger: Logger): Promise<string[]> {
+/** The operators that quantise to the Palette, and the output settings that must follow them. */
+interface PaletteOperators {
+  operators: string[]
+  output: string[]
+}
+
+async function paletteOperators(palette: Palette, dither: boolean, colormapFor: (colors: string[]) => Promise<string>): Promise<PaletteOperators> {
   const conversion = paletteConversion(palette)
   const ditherMethod = dither ? 'FloydSteinberg' : 'None'
   switch (conversion.kind) {
     case 'gray': {
-      const colormap = await ensureColormap(palette, grayLevelsHex(conversion.levels), logger)
-      return ['-colorspace', 'Gray', '-dither', ditherMethod, '-remap', colormap, '-define', `png:bit-depth=${conversion.bitDepth}`, '-define', 'png:color-type=0']
+      const colormap = await colormapFor(grayLevelsHex(conversion.levels))
+      return {
+        operators: ['-colorspace', 'Gray', '-dither', ditherMethod, '-remap', colormap],
+        output: ['-define', `png:bit-depth=${conversion.bitDepth}`, '-define', 'png:color-type=0'],
+      }
     }
     case 'color': {
-      const colormap = await ensureColormap(palette, conversion.colors, logger)
+      const colormap = await colormapFor(conversion.colors)
       // -modulate brightness,saturation: pushed colours past the thresholds the firmware
       // uses to tell red/yellow apart from gray (see docs/adr/0002-color-palette-png-format.md)
       const saturationBoost = '110,150'
-      return ['-normalize', '-modulate', saturationBoost, '-colorspace', 'RGB', '-dither', ditherMethod, '-remap', colormap, '-colorspace', 'sRGB', '-define', 'png:color-type=3']
+      return {
+        operators: ['-normalize', '-modulate', saturationBoost, '-colorspace', 'RGB', '-dither', ditherMethod, '-remap', colormap, '-colorspace', 'sRGB'],
+        output: ['-define', 'png:color-type=3'],
+      }
     }
     case 'full-color':
-      return ['-colorspace', 'sRGB', '-define', 'png:color-type=2']
+      return { operators: ['-colorspace', 'sRGB'], output: ['-define', 'png:color-type=2'] }
   }
 }
 
@@ -199,10 +225,57 @@ export async function convertBlankToPng(outputPath: string, target: DeviceRender
   }
 }
 
+/**
+ * Magick arguments that take the prepared, positioned image, quantise it
+ * without dithering, and dither only the `regions` (in source pixels) with the
+ * same Palette. The regions travel through the same geometry as the image as a
+ * black-and-white mask.
+ */
+function regionDitherArgs(target: DeviceRenderTarget, regions: PixelRegion[], undithered: PaletteOperators, dithered: PaletteOperators): string[] {
+  const { width, height } = target.model
+  const rectangles = regions.flatMap(({ x, y, width: w, height: h }) => ['-draw', `rectangle ${x},${y} ${x + w - 1},${y + h - 1}`])
+  return [
+    '-write',
+    'mpr:source',
+    '+delete',
+    '(',
+    'mpr:source',
+    ...undithered.operators,
+    ')',
+    '(',
+    'mpr:source',
+    ...dithered.operators,
+    ')',
+    '(',
+    '-size',
+    `${width}x${height}`,
+    '-background',
+    'black',
+    'xc:black',
+    '-fill',
+    'white',
+    '-gravity',
+    'NorthWest',
+    ...rectangles,
+    ...geometryOperators(target),
+    '-threshold',
+    '50%',
+    ')',
+    '-composite',
+    ...undithered.output,
+  ]
+}
+
 /** Converts any supported raster image into the PNG a device with the given render target expects. */
 export async function convertToPng(inputPath: string, outputPath: string, target: DeviceRenderTarget, logger: Logger, options: ConversionOptions = {}) {
   const format = await detectFormatOfFile(inputPath)
-  const palette = await paletteOperators(target.palette, options, logger)
+  const { dither = true, ditherRegions = [] } = options
+  const colormapFor = (colors: string[]) => ensureColormap(target.palette, colors, logger)
+  const undithered = await paletteOperators(target.palette, dither, colormapFor)
+  const regions = !dither && paletteConversion(target.palette).kind !== 'full-color' ? ditherRegions : []
+  const palette = regions.length > 0
+    ? regionDitherArgs(target, regions, undithered, await paletteOperators(target.palette, true, colormapFor))
+    : [...undithered.operators, ...undithered.output]
 
   const args = [
     `${format}:${inputPath}`,
