@@ -15,10 +15,11 @@ Every image Kuroshiro converts for a Device is Floyd-Steinberg dithered, which i
 - **Per Palette.** Would need a second copy of every Palette to get both treatments.
 - **A per-Screen override for `plugin` Screens.** A second inheritance rule and a "which one wins" UI for a case nobody asked for.
 - **A stored value on the Mashup.** One more control that can disagree with its slots.
-- **Importing it from a Recipe.** The `.trmnlp` format has no such key; trmnl.com dithers per element through the `image-dither` CSS class instead, which is a different feature.
+- **Importing it from a Recipe.** The `.trmnlp` format has no such key; trmnl.com dithers per element through the `image-dither` CSS class instead, which is a different feature (honoured on an undithered Screen since #1783, see Consequences).
 
 ## Consequences
 
 - The Screen and the Plugin gain a non-null boolean column, default true, via migration.
 - The Configuration Archive carries it on Screen and Plugin entries at schemaVersion 5; an older archive reads a missing value as dithered. The Showcase Archive is unchanged.
-- Additive follow-ups: honouring TRMNL's `image-dither` class for per-element dithering, a hint on the Mashup form when its slots make it undithered.
+- On a Screen whose Dithering is off, the renderer dithers the bounding box of every element carrying TRMNL's `image-dither` class in the final rendered page, a Mashup's slots included, with the Screen's Palette; the rest stays undithered. A Screen with Dithering on, and a full-color Palette, are unchanged. The TRMNL framework ships no handler for the class, so this is the renderer's work.
+- Additive follow-ups: a hint on the Mashup form when its slots make it undithered.

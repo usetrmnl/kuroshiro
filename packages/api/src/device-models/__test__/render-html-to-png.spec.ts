@@ -49,6 +49,22 @@ describe('renderHtmlToPng', () => {
     expect(convertToPng).toHaveBeenCalledWith('/out/screen.png.tmp-source', '/out/screen.png', TARGET, logger, {})
   })
 
+  it('hands the image-dither boxes to the conversion only when the Screen is not dithered', async () => {
+    const regions = [{ x: 10, y: 20, width: 100, height: 50 }]
+    puppeteerPage.evaluate.mockResolvedValueOnce(undefined).mockResolvedValueOnce({ skip: false, hold: false }).mockResolvedValueOnce(regions)
+
+    await renderHtmlToPng('<html></html>', TARGET, '/out/screen.png', logger, { dither: false })
+
+    expect(convertToPng).toHaveBeenCalledWith('/out/screen.png.tmp-source', '/out/screen.png', TARGET, logger, { dither: false, ditherRegions: regions })
+  })
+
+  it('does not look for image-dither elements on a dithered Screen', async () => {
+    await renderHtmlToPng('<html></html>', TARGET, '/out/screen.png', logger, { dither: true })
+
+    expect(puppeteerPage.evaluate).toHaveBeenCalledTimes(2)
+    expect(convertToPng).toHaveBeenCalledWith('/out/screen.png.tmp-source', '/out/screen.png', TARGET, logger, { dither: true })
+  })
+
   it('reports skip and still converts when not honoring the signal', async () => {
     puppeteerPage.evaluate.mockResolvedValue({ skip: true, hold: false })
 

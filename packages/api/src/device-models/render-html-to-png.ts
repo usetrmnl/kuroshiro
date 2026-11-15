@@ -1,7 +1,7 @@
 import type { Logger } from '@nestjs/common'
 import type { RenderSignal } from 'kuroshiro-shared'
 import type { Page } from 'puppeteer'
-import type { ConversionOptions } from '../utils/imageUtils.js'
+import type { ConversionOptions, PixelRegion } from '../utils/imageUtils.js'
 import type { DeviceRenderTarget } from './device-models.service.js'
 import buffer from 'node:buffer'
 import * as fs from 'node:fs'
@@ -33,6 +33,29 @@ async function readRenderSignal(page: Page): Promise<RenderSignal | null> {
 }
 
 /**
+ * The viewport boxes of every element carrying TRMNL's `image-dither` class,
+ * rounded outward to whole pixels and clipped to the viewport; elements with
+ * nothing visible are left out.
+ */
+async function readDitherRegions(page: Page): Promise<PixelRegion[]> {
+  return await page.evaluate(() => {
+    const viewportWidth = document.documentElement.clientWidth
+    const viewportHeight = window.innerHeight
+    const regions: PixelRegion[] = []
+    for (const element of document.querySelectorAll('.image-dither')) {
+      const box = element.getBoundingClientRect()
+      const left = Math.max(0, Math.floor(box.left))
+      const top = Math.max(0, Math.floor(box.top))
+      const right = Math.min(viewportWidth, Math.ceil(box.right))
+      const bottom = Math.min(viewportHeight, Math.ceil(box.bottom))
+      if (right > left && bottom > top)
+        regions.push({ x: left, y: top, width: right - left, height: bottom - top })
+    }
+    return regions
+  })
+}
+
+/**
  * Screenshots an already-shelled HTML document at the render target's native
  * pixel size and converts the screenshot to the target's PNG at `outputPath`,
  * reporting the Render Signal observed at the same moment. `honorRenderSignal`
@@ -53,7 +76,9 @@ export async function renderHtmlToPng(html: string, target: DeviceRenderTarget, 
 
       await fs.promises.mkdir(path.dirname(outputPath), { recursive: true })
       await fs.promises.writeFile(tmpPath, buffer.Buffer.from(image))
-      await convertToPng(tmpPath, outputPath, target, logger, conversion)
+      // A Screen that is not dithered as a whole still dithers what the page marks `image-dither`.
+      const ditherRegions = conversion.dither === false ? await readDitherRegions(page) : []
+      await convertToPng(tmpPath, outputPath, target, logger, ditherRegions.length > 0 ? { ...conversion, ditherRegions } : conversion)
       return renderSignal
     })
   }
