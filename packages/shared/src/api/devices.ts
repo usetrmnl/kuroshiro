@@ -118,6 +118,8 @@ export interface DeviceDetail extends DeviceSummary {
   targetFirmware: { id: string, version: string, kind: 'official-synced' | 'custom', label: string | null, deprecated: boolean } | null
   pending: { specialFunction: SpecialFunction | null, deviceReset: boolean, deviceResetNewApikey: boolean, wipe: boolean, firmwarePush: boolean }
   sleepImagePath: string | null
+  /** The Device Group whose Screens the Device shows; `null` when it shows its own. */
+  deviceGroup: { id: string, name: string } | null
   /** The raw `Update-Source` header of the last poll (`button`, `EXT0`, `timer`, `powercycle`, …); `null` before a poll that sent one. */
   lastWakeSource: string | null
   sensors: SensorReading[]
@@ -138,6 +140,8 @@ export interface UpdateDeviceInput {
   /** Integer seconds, `REFRESH_RATE_MIN` to `REFRESH_RATE_MAX`. */
   refreshRate?: number
   rotationMode?: RotationMode
+  /** Joins, moves between, or (`null`) leaves a Device Group. Every change resets the Device's Rotation. */
+  deviceGroupId?: string | null
   /** Changing it resets the Palette to the Device Model's richest one unless `paletteId` is sent too. */
   deviceModelName?: string
   paletteId?: string

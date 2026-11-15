@@ -1,5 +1,6 @@
 import type { RotationMode } from 'kuroshiro-shared'
 import type { Relation } from 'typeorm'
+import type { DeviceGroup } from '../device-groups/device-group.entity.js'
 import type { LogEntry } from '../logs/logs.entity.js'
 import type { Screen } from '../screens/screens.entity.js'
 import type { LastServedFallback, LastServedKind, LastServedReason } from './last-served.js'
@@ -111,6 +112,10 @@ export class Device {
   targetFirmware?: Firmware | null
 
   /** The Screen an admin picked ("Show next"), served and cleared by the next non-sleeping `/display` poll (ADR-0038). */
+  /** The Device Group whose Screens the Device shows; its own Screens stay stored and parked (ADR-0078). */
+  @ManyToOne('DeviceGroup', { nullable: true, eager: true, onDelete: 'SET NULL' })
+  deviceGroup?: Relation<DeviceGroup> | null
+
   @ManyToOne('Screen', { nullable: true, eager: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'pickedScreenId' })
   pickedScreen?: Relation<Screen> | null

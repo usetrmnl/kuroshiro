@@ -1,10 +1,11 @@
-import type { ConfigurationImportSummary, ImportCheck, ImportCounts, ImportWarning, Ref } from 'kuroshiro-shared'
+import type { ConfigurationImportSummary, ImportCheck, ImportCounts, ImportWarning, Ref, ScreenOwner } from 'kuroshiro-shared'
 import type { EntityManager, Repository } from 'typeorm'
 import type { DeviceRenderTarget } from '../../device-models/device-models.service.js'
 import type { ParsedDataSource, ParsedPlugin } from '../../plugins/services/plugin-importer.service.js'
 import type {
   AssignmentManifestEntry,
   ConfigurationManifest,
+  DeviceGroupManifestEntry,
   DeviceManifestEntry,
   FirmwareManifestEntry,
   InstanceSettingsManifestEntry,
@@ -29,6 +30,7 @@ import AdmZip from 'adm-zip'
 import * as yaml from 'js-yaml'
 import { BOOLEAN_SETTING_KEYS, CONFIGURATION_REDACTION_SENTINEL, SETTING_KEYS } from 'kuroshiro-shared'
 import { QueryFailedError } from 'typeorm'
+import { DeviceGroup } from '../../device-groups/device-group.entity.js'
 import { DeviceModelsService } from '../../device-models/device-models.service.js'
 import { DeviceModel } from '../../device-models/entities/device-model.entity.js'
 import { Palette } from '../../device-models/entities/palette.entity.js'
@@ -51,6 +53,8 @@ import { PluginImporterService } from '../../plugins/services/plugin-importer.se
 import { PluginSchedulerService } from '../../plugins/services/plugin-scheduler.service.js'
 import { Schedule } from '../../schedule/schedule.entity.js'
 import { DeviceScreen } from '../../screens/device-screen.entity.js'
+import { originalImagePath, screenImagePath } from '../../screens/screen-image-paths.js'
+import { ownerRelation } from '../../screens/screen-owner.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { INSTANCE_SETTINGS_ID, InstanceSettings } from '../../settings/entities/instance-settings.entity.js'
 import { settingViolation } from '../../settings/setting-violation.js'
@@ -60,8 +64,7 @@ import { fileExists } from '../../utils/fileExists.js'
 import generateApikey from '../../utils/generateApikey.js'
 import { getErrorMessage } from '../../utils/getErrorMessage.js'
 import { convertToPng } from '../../utils/imageUtils.js'
-import { resolveAppPath } from '../../utils/pathHelper.js'
-import { CONFIG_SCHEMA_VERSION, FIRST_CONFIG_SCHEMA_VERSION_WITH_SETTINGS, IMPORTABLE_CONFIG_SCHEMA_VERSIONS, LEGACY_CONFIG_SCHEMA_VERSIONS } from '../schema-version.js'
+import { CONFIG_SCHEMA_VERSION, FIRST_CONFIG_SCHEMA_VERSION_WITH_DEVICE_GROUPS, FIRST_CONFIG_SCHEMA_VERSION_WITH_SETTINGS, IMPORTABLE_CONFIG_SCHEMA_VERSIONS, LEGACY_CONFIG_SCHEMA_VERSIONS } from '../schema-version.js'
 import { CONFIG_ARCHIVE_FILES } from '../types.js'
 import { archiveEntryViolation } from './archive-entry-violation.js'
 import { toImportCheck } from './import-check.mapper.js'
@@ -112,6 +115,7 @@ interface ArchiveContents {
   zip: AdmZip
   manifest: ConfigurationManifest
   plugins: Array<PluginManifestEntry & LegacyPluginManifestFields>
+  deviceGroups: DeviceGroupManifestEntry[]
   devices: DeviceManifestEntry[]
   screens: ScreenManifestEntry[]
   assignments: Array<AssignmentManifestEntry & LegacyAssignmentManifestFields>
@@ -164,6 +168,7 @@ interface TransactionRepos {
   template: Repository<PluginTemplate>
   field: Repository<PluginField>
   device: Repository<Device>
+  deviceGroup: Repository<DeviceGroup>
   deviceModel: Repository<DeviceModel>
   devicePlugin: Repository<DevicePlugin>
   fieldValue: Repository<PluginFieldValue>
@@ -224,6 +229,7 @@ export class ConfigurationImportService {
 
     const lists = {
       plugins: this.readList<PluginManifestEntry & LegacyPluginManifestFields>(zip, CONFIG_ARCHIVE_FILES.plugins),
+      deviceGroups: manifest.schemaVersion < FIRST_CONFIG_SCHEMA_VERSION_WITH_DEVICE_GROUPS || !zip.getEntry(CONFIG_ARCHIVE_FILES.deviceGroups) ? [] : this.readList<DeviceGroupManifestEntry>(zip, CONFIG_ARCHIVE_FILES.deviceGroups),
       devices: this.readList<DeviceManifestEntry>(zip, CONFIG_ARCHIVE_FILES.devices),
       screens: this.readList<ScreenManifestEntry>(zip, CONFIG_ARCHIVE_FILES.screens),
       assignments: this.readList<AssignmentManifestEntry & LegacyAssignmentManifestFields>(zip, CONFIG_ARCHIVE_FILES.assignments),
@@ -280,14 +286,19 @@ export class ConfigurationImportService {
           await this.withEntryContext('Plugin', entry.id, () => this.upsertPlugin(repos, zip, entry, run))
         }
 
-        const deviceIdRemap = await this.upsertDevices(repos, zip, archive.devices, run)
+        const groupIdRemap = new Map<string, string>()
+        for (const entry of archive.deviceGroups) {
+          await this.withEntryContext('Device Group', entry.id, () => this.upsertDeviceGroup(repos.deviceGroup, entry, groupIdRemap, run))
+        }
+
+        const deviceIdRemap = await this.upsertDevices(repos, zip, archive.devices, groupIdRemap, run)
 
         for (const entry of archive.assignments) {
-          await this.withEntryContext('Assignment', entry.id, () => this.upsertAssignment(repos, entry, deviceIdRemap, run))
+          await this.withEntryContext('Assignment', entry.id, () => this.upsertAssignment(repos, entry, deviceIdRemap, groupIdRemap, run))
         }
 
         for (const entry of archive.screens) {
-          await this.withEntryContext('Screen', entry.id, () => this.upsertScreen(repos, zip, entry, deviceIdRemap, run))
+          await this.withEntryContext('Screen', entry.id, () => this.upsertScreen(repos, zip, entry, deviceIdRemap, groupIdRemap, run))
         }
 
         await this.withEntryContext('Instance Settings', null, () => this.replaceInstanceSettings(repos.instanceSettings, archive.settings))
@@ -357,6 +368,7 @@ export class ConfigurationImportService {
       template: manager.getRepository(PluginTemplate),
       field: manager.getRepository(PluginField),
       device: manager.getRepository(Device),
+      deviceGroup: manager.getRepository(DeviceGroup),
       deviceModel: manager.getRepository(DeviceModel),
       devicePlugin: manager.getRepository(DevicePlugin),
       fieldValue: manager.getRepository(PluginFieldValue),
@@ -560,11 +572,22 @@ export class ConfigurationImportService {
     return firmware
   }
 
+  /** A Device Group is matched by id, and else by name, as a Device is re-attached by mac: the names are unique, so the archive's id then reads as the one already here. */
+  private async upsertDeviceGroup(repo: Repository<DeviceGroup>, entry: DeviceGroupManifestEntry, groupIdRemap: Map<string, string>, run: ImportRun): Promise<void> {
+    const existing = await repo.findOneBy({ id: entry.id }) ?? await repo.findOneBy({ name: entry.name })
+    const group = existing ?? repo.create({ id: entry.id })
+    group.name = entry.name
+    const saved = await repo.save(group)
+    if (saved.id !== entry.id)
+      groupIdRemap.set(entry.id, saved.id)
+    this.bump(run, 'deviceGroups', !existing)
+  }
+
   /** Upserts every Device entry, remapping an id a mac re-attach resolved to a different row, and summarizes a kept apikey once (ADR-0039). */
-  private async upsertDevices(repos: TransactionRepos, zip: AdmZip, entries: DeviceManifestEntry[], run: ImportRun): Promise<Map<string, string>> {
+  private async upsertDevices(repos: TransactionRepos, zip: AdmZip, entries: DeviceManifestEntry[], groupIdRemap: Map<string, string>, run: ImportRun): Promise<Map<string, string>> {
     const deviceIdRemap = new Map<string, string>()
     for (const entry of entries) {
-      const dbId = await this.withEntryContext('Device', entry.id, () => this.upsertDevice(repos, zip, entry, run))
+      const dbId = await this.withEntryContext('Device', entry.id, () => this.upsertDevice(repos, zip, entry, groupIdRemap, run))
       if (dbId !== entry.id) {
         deviceIdRemap.set(entry.id, dbId)
       }
@@ -575,7 +598,7 @@ export class ConfigurationImportService {
     return deviceIdRemap
   }
 
-  private async upsertDevice(repos: TransactionRepos, zip: AdmZip, entry: DeviceManifestEntry, run: ImportRun): Promise<string> {
+  private async upsertDevice(repos: TransactionRepos, zip: AdmZip, entry: DeviceManifestEntry, groupIdRemap: Map<string, string>, run: ImportRun): Promise<string> {
     let device = await repos.device.findOneBy({ id: entry.id })
     let wasCreated = !device
     let reattachedByMac = false
@@ -620,6 +643,7 @@ export class ConfigurationImportService {
     device.sleepEndTime = entry.sleepEndTime
     device.sleepScreenEnabled = entry.sleepScreenEnabled
     device.targetFirmware = await this.resolveFirmware(repos.firmware, entry.targetFirmwareId, ref, run)
+    this.applyDeviceGroup(device, entry, groupIdRemap)
 
     await this.applySleepImageToDevice(zip, entry.id, device, ref, run)
 
@@ -627,6 +651,13 @@ export class ConfigurationImportService {
     this.bump(run, 'devices', wasCreated)
     ;(wasCreated ? run.devices.added : run.devices.overwritten).push(ref)
     return saved.id
+  }
+
+  /** Puts the Device in the Group its entry names, as the Group ended up here; an entry from before schemaVersion 8 names none and leaves the Device where it is. */
+  private applyDeviceGroup(device: Device, entry: DeviceManifestEntry, groupIdRemap: Map<string, string>): void {
+    if (entry.deviceGroupId === undefined)
+      return
+    device.deviceGroup = entry.deviceGroupId === null ? null : { id: groupIdRemap.get(entry.deviceGroupId) ?? entry.deviceGroupId } as DeviceGroup
   }
 
   /**
@@ -983,12 +1014,17 @@ export class ConfigurationImportService {
     return changed
   }
 
-  private async upsertAssignment(repos: TransactionRepos, entry: AssignmentManifestEntry, deviceIdRemap: Map<string, string>, run: ImportRun): Promise<void> {
-    const deviceId = deviceIdRemap.get(entry.deviceId) ?? entry.deviceId
-
+  private async upsertAssignment(repos: TransactionRepos, entry: AssignmentManifestEntry, deviceIdRemap: Map<string, string>, groupIdRemap: Map<string, string>, run: ImportRun): Promise<void> {
     const existing = await repos.devicePlugin.findOneBy({ id: entry.id })
     const assignment = existing ?? repos.devicePlugin.create({ id: entry.id })
-    assignment.device = { id: deviceId } as Device
+    if (entry.deviceGroupId) {
+      assignment.device = null
+      assignment.deviceGroup = { id: groupIdRemap.get(entry.deviceGroupId) ?? entry.deviceGroupId } as DeviceGroup
+    }
+    else {
+      assignment.device = { id: deviceIdRemap.get(entry.deviceId!) ?? entry.deviceId! } as Device
+      assignment.deviceGroup = null
+    }
     assignment.plugin = { id: entry.pluginId } as Plugin
     assignment.order = entry.order
     assignment.isActive = entry.isActive
@@ -996,13 +1032,16 @@ export class ConfigurationImportService {
     this.bump(run, 'assignments', !existing)
   }
 
-  private async upsertScreen(repos: TransactionRepos, zip: AdmZip, entry: ScreenManifestEntry, deviceIdRemap: Map<string, string>, run: ImportRun): Promise<void> {
-    const deviceId = deviceIdRemap.get(entry.deviceId) ?? entry.deviceId
+  private async upsertScreen(repos: TransactionRepos, zip: AdmZip, entry: ScreenManifestEntry, deviceIdRemap: Map<string, string>, groupIdRemap: Map<string, string>, run: ImportRun): Promise<void> {
+    const archived = entry.owner ?? { kind: 'device' as const, id: entry.deviceId! }
+    const owner = archived.kind === 'device'
+      ? { kind: 'device' as const, id: deviceIdRemap.get(archived.id) ?? archived.id }
+      : { kind: 'deviceGroup' as const, id: groupIdRemap.get(archived.id) ?? archived.id }
 
-    const screen = await this.saveScreenRow(repos, entry, deviceId, run)
+    const screen = await this.saveScreenRow(repos, entry, owner, run)
 
     if (entry.type === 'file') {
-      this.restoreScreenImage(zip, entry.id, deviceId, run)
+      await this.restoreScreenImages(repos, zip, entry, owner, run)
     }
 
     if (entry.schedule) {
@@ -1014,10 +1053,10 @@ export class ConfigurationImportService {
     }
   }
 
-  private async saveScreenRow(repos: TransactionRepos, entry: ScreenManifestEntry, deviceId: string, run: ImportRun): Promise<Screen> {
+  private async saveScreenRow(repos: TransactionRepos, entry: ScreenManifestEntry, owner: ScreenOwner, run: ImportRun): Promise<Screen> {
     const existing = await repos.screen.findOneBy({ id: entry.id })
     const screen = existing ?? repos.screen.create({ id: entry.id })
-    screen.device = { id: deviceId } as Device
+    Object.assign(screen, ownerRelation(owner))
     screen.type = entry.type
     screen.order = entry.order
     screen.filename = entry.filename
@@ -1033,9 +1072,11 @@ export class ConfigurationImportService {
     screen.plugin = entry.pluginId ? ({ id: entry.pluginId } as Plugin) : null
     screen.devicePluginId = entry.devicePluginId
     const saved = await repos.screen.save(screen)
-    // The restored Screen's render is stale until the next poll recomputes it (ADR-0021): its record starts over.
+    // The restored Screen's render is stale until the next poll recomputes it (ADR-0021): its records start over,
+    // a Device's own at once and a Device Group's when a member first meets it.
     await repos.deviceScreen.delete({ screen: { id: saved.id } })
-    await repos.deviceScreen.insert({ device: { id: deviceId }, screen: { id: saved.id }, isActive: false, generatedAt: new Date(), cachedPluginOutput: null, renderSignal: null })
+    if (owner.kind === 'device')
+      await repos.deviceScreen.insert({ device: { id: owner.id }, screen: { id: saved.id }, isActive: false, generatedAt: new Date(), cachedPluginOutput: null, renderSignal: null })
     this.bump(run, 'screens', !existing)
     return saved
   }
@@ -1076,20 +1117,56 @@ export class ConfigurationImportService {
   }
 
   /**
-   * A check reads the image as an import does, so that an archive whose image cannot be read is refused by both.
-   * An import defers the write itself until its transaction commits: queuing it here, before the row
-   * is even known to stick, would leave it on disk after a later record's refusal rolls the row back.
+   * A check reads the images as an import does, so that an archive whose image cannot be read is refused by both.
+   * An import defers the writes themselves until its transaction commits: queuing them here, before the row
+   * is even known to stick, would leave them on disk after a later record's refusal rolls the row back.
+   *
+   * From schemaVersion 8 the retained original travels, and is converted again for the Device Model and Palette of
+   * each Device that shows the Screen (a Device Group's members, or the owning Device). An older archive, or a
+   * Screen whose original is gone, carries only the converted image, which a Device's own Screen keeps as it is.
    */
-  private restoreScreenImage(zip: AdmZip, screenId: string, deviceId: string, run: ImportRun): void {
-    const imageEntry = zip.getEntries().find(e => !e.isDirectory && e.entryName.startsWith(`screens/${screenId}/`))
-    if (!imageEntry) {
-      return
+  private async restoreScreenImages(repos: TransactionRepos, zip: AdmZip, entry: ScreenManifestEntry, owner: ScreenOwner, run: ImportRun): Promise<void> {
+    const originalEntry = zip.getEntry(`screens/${entry.id}.original`)
+    const convertedEntry = zip.getEntries().find(e => !e.isDirectory && e.entryName.startsWith(`screens/${entry.id}/`))
+    const converted = convertedEntry ? this.readEntry(convertedEntry) : null
+    // Only a Device's own Screen keeps the converted image as it stands: a Group's has one per member, made from the original.
+    const keptAsIs = owner.kind === 'device' && converted ? [{ destPath: screenImagePath(owner.id, entry.id), image: converted }] : []
+
+    const original = originalEntry ? this.readEntry(originalEntry) : null
+    const writes = original
+      ? [{ destPath: originalImagePath(owner.id, entry.id), image: original }, ...await this.convertedImagesOf(repos, entry, owner, original, keptAsIs)]
+      : keptAsIs
+    if (!run.checkOnly)
+      run.pendingImageWrites.push(...writes)
+  }
+
+  /** The original converted again for each Device that shows the Screen; a failed conversion falls back on `fallback`, as a degraded restore and not a refusal. */
+  private async convertedImagesOf(repos: TransactionRepos, entry: ScreenManifestEntry, owner: ScreenOwner, original: Buffer, fallback: PendingImageWrite[]): Promise<PendingImageWrite[]> {
+    const shownBy = await repos.device.find({ where: owner.kind === 'device' ? { id: owner.id } : { deviceGroup: { id: owner.id } } })
+    try {
+      return await Promise.all(shownBy.map(async device => ({
+        destPath: screenImagePath(device.id, entry.id),
+        image: await this.convertImageForImport(entry.id, original, await this.deviceModels.renderTargetFor(device), entry.dither ?? true),
+      })))
     }
-    const image = this.readEntry(imageEntry)
-    if (run.checkOnly) {
-      return
+    catch (err) {
+      this.logger.error(`Failed to restore the image of screen ${entry.id}: ${getErrorMessage(err)}`)
+      return fallback
     }
-    const destDir = resolveAppPath('public', 'screens', 'devices', deviceId)
-    run.pendingImageWrites.push({ destPath: path.join(destDir, `${screenId}.png`), image })
+  }
+
+  /** `original` converted for `target` as a Screen's image is, through a throwaway temp directory, as `convertSleepImageForImport` does. */
+  private async convertImageForImport(screenId: string, original: Buffer, target: DeviceRenderTarget, dither: boolean): Promise<Buffer> {
+    const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'kuroshiro-import-screen-image-'))
+    const tempOriginal = path.join(tmpDir, `${screenId}.original`)
+    const tempConverted = path.join(tmpDir, `${screenId}.png`)
+    try {
+      await fs.promises.writeFile(tempOriginal, original)
+      await convertToPng(tempOriginal, tempConverted, target, this.logger, { dither })
+      return await fs.promises.readFile(tempConverted)
+    }
+    finally {
+      await fs.promises.rm(tmpDir, { recursive: true, force: true })
+    }
   }
 }

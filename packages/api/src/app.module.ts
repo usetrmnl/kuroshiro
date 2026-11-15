@@ -10,6 +10,8 @@ import { Alert } from './alerts/entities/alert.entity.js'
 import config from './config/config.js'
 import { migrationLogger } from './config/migration-logger.js'
 import { ConfigurationModule } from './configuration/configuration.module.js'
+import { DeviceGroup } from './device-groups/device-group.entity.js'
+import { DeviceGroupsModule } from './device-groups/device-groups.module.js'
 import { CustomPalettesModule } from './device-models/custom-palettes.module.js'
 import { DeviceModelsModule } from './device-models/device-models.module.js'
 import { DevicePreviewModule } from './device-models/device-preview.module.js'
@@ -66,7 +68,7 @@ const conf = config()
       username: conf.database.user,
       password: conf.database.password,
       database: conf.database.database,
-      entities: [Device, DeviceModel, Palette, DeviceSensor, Screen, DeviceScreen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, MashupConfiguration, MashupSlot, Schedule, Firmware, Alert, InstanceSettings, SyncRun],
+      entities: [Device, DeviceGroup, DeviceModel, Palette, DeviceSensor, Screen, DeviceScreen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, MashupConfiguration, MashupSlot, Schedule, Firmware, Alert, InstanceSettings, SyncRun],
       migrations: (() => {
         const dir = path.join(process.cwd(), 'dist', 'src', 'migrations')
         if (!fs.existsSync(dir))
@@ -90,6 +92,7 @@ const conf = config()
     DevicePreviewModule,
     FirmwareModule,
     DevicesModule,
+    DeviceGroupsModule,
     PluginsModule,
     MashupModule,
     ScheduleModule,

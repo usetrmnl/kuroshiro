@@ -1,5 +1,6 @@
 import type {
   AssignmentManifestEntry,
+  DeviceGroupManifestEntry,
   DeviceManifestEntry,
   FirmwareManifestEntry,
   PaletteManifestEntry,
@@ -13,6 +14,7 @@ import { CONFIG_ARCHIVE_FILES } from '../types.js'
 /** The record lists of a Configuration Archive, each entry already known to be an object with a string id. */
 export interface ArchiveEntryLists {
   plugins: PluginManifestEntry[]
+  deviceGroups: DeviceGroupManifestEntry[]
   devices: DeviceManifestEntry[]
   screens: ScreenManifestEntry[]
   assignments: AssignmentManifestEntry[]
@@ -115,11 +117,13 @@ const RULES: { [K in keyof ArchiveEntryLists]: FieldRule[] } = {
     eachOf('templates', uuid('id')),
     eachOf('fields', uuid('id')),
   ],
-  devices: [uuid('id'), uuid('targetFirmwareId', { nullable: true }), oneOf('rotationMode', ROTATION_MODES, { optional: true })],
-  assignments: [uuid('id'), uuid('deviceId'), uuid('pluginId')],
+  deviceGroups: [uuid('id')],
+  devices: [uuid('id'), uuid('targetFirmwareId', { nullable: true }), uuid('deviceGroupId', { nullable: true }), oneOf('rotationMode', ROTATION_MODES, { optional: true })],
+  assignments: [uuid('id'), uuid('deviceId', { nullable: true }), uuid('deviceGroupId', { nullable: true }), uuid('pluginId')],
   screens: [
     uuid('id'),
-    uuid('deviceId'),
+    uuid('deviceId', { nullable: true }),
+    nested('owner', [oneOf('kind', ['device', 'deviceGroup']), uuid('id')]),
     uuid('pluginId', { nullable: true }),
     uuid('devicePluginId', { nullable: true }),
     oneOf('type', SCREEN_TYPES),
@@ -134,7 +138,7 @@ const RULES: { [K in keyof ArchiveEntryLists]: FieldRule[] } = {
  */
 export function archiveEntryViolation(lists: ArchiveEntryLists): string | null {
   for (const key of Object.keys(RULES) as Array<keyof ArchiveEntryLists>) {
-    for (const entry of lists[key] as unknown as Array<Record<string, unknown>>) {
+    for (const entry of (lists[key] ?? []) as unknown as Array<Record<string, unknown>>) {
       const violation = allOf(RULES[key])(entry)
       if (violation)
         return `${CONFIG_ARCHIVE_FILES[key]} entry ${JSON.stringify(entry.id)}: ${violation}`

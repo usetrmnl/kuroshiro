@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { TypeOrmModule } from '@nestjs/typeorm'
+import { DeviceGroupsModule } from '../device-groups/device-groups.module.js'
 import { DeviceModelsModule } from '../device-models/device-models.module.js'
 import { DeviceSensorsModule } from '../device-sensors/device-sensors.module.js'
 import { FirmwareModule } from '../firmware/firmware.module.js'
@@ -21,7 +22,7 @@ import { SetupController } from './setup.controller.js'
 import { DeviceSetupService } from './setup.service.js'
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Device, Screen, DeviceScreen, LogEntry]), ConfigModule, PluginsModule, DeviceModelsModule, DeviceSensorsModule, FirmwareModule, ScreensModule, MashupModule, DeviceSleepImageModule],
+  imports: [TypeOrmModule.forFeature([Device, Screen, DeviceScreen, LogEntry]), ConfigModule, PluginsModule, DeviceModelsModule, DeviceSensorsModule, FirmwareModule, ScreensModule, MashupModule, DeviceSleepImageModule, DeviceGroupsModule],
   controllers: [DevicesController, DisplayController, SetupController],
   providers: [DevicesService, DeviceReadsService, DeviceDisplayService, DeviceSetupService],
   exports: [DevicesService],

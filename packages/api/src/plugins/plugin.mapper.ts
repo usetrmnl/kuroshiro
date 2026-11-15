@@ -26,6 +26,8 @@ export interface PluginFacts {
 export interface PluginDetailFacts extends PluginFacts {
   /** Every Screen, in Order and with its Schedule, of each Device the Plugin is assigned to, by Device id. */
   screensByDevice: ReadonlyMap<string, DeviceScreen[]>
+  /** How many Screens each Device Group the Plugin is assigned to owns, by Device Group id. */
+  screenCountByGroup: ReadonlyMap<string, number>
   now: Date
   /** The address the instance is reached at from outside. */
   apiUrl: string
@@ -51,7 +53,10 @@ function polledDataSources(plugin: Plugin): PluginDataSource[] {
 export function toPluginPlaces(mashupScreens: Screen[]): PluginPlace[] {
   const byScreen = new Map(mashupScreens.map(screen => [screen.id, screen]))
   return [...byScreen.values()]
-    .map(screen => ({ screenId: screen.id, name: screen.filename ?? '', deviceId: screen.device.id, deviceName: screen.device.name }))
+    .map((screen) => {
+      const owner = ownerNamed(screen)
+      return { screenId: screen.id, name: screen.filename ?? '', deviceId: owner.id, deviceName: owner.name }
+    })
     .sort((a, b) => compareIgnoringCase(a.name, b.name) || compareIgnoringCase(a.deviceName, b.deviceName))
 }
 
@@ -63,7 +68,10 @@ export function toPluginSummary(plugin: Plugin, facts: PluginFacts): PluginSumma
     kind: plugin.kind,
     sourceRecipeId: plugin.sourceRecipeId ?? null,
     devices: facts.assignmentScreens
-      .map(({ device }) => ({ id: device.id, name: device.name }))
+      .map((screen) => {
+        const owner = ownerNamed(screen)
+        return { id: owner.id, name: owner.name }
+      })
       .sort((a, b) => compareIgnoringCase(a.name, b.name)),
     mashups: toPluginPlaces(facts.mashupScreens),
     worstFetchFailureStreak: Math.max(0, ...dataSources.map(source => source.fetchFailureStreak)),
@@ -154,17 +162,24 @@ function toRecipeRead(plugin: Plugin): PluginDetail['recipe'] {
 }
 
 function toAssignmentRead(screen: Screen, facts: PluginDetailFacts): PluginAssignmentRead {
+  const owner = ownerNamed(screen)
   const { device } = screen
-  const screensInOrder = facts.screensByDevice.get(device.id) ?? []
-  const states = screenStatesOfDevice(device, screensInOrder, facts.now)
+  const screensInOrder = device ? facts.screensByDevice.get(device.id) ?? [] : []
+  const states = device ? screenStatesOfDevice(device, screensInOrder, facts.now) : new Map()
   return {
-    deviceId: device.id,
-    deviceName: device.name,
+    deviceId: owner.id,
+    deviceName: owner.name,
     screenId: screen.id,
     order: screen.order,
-    screenCount: screensInOrder.length,
+    screenCount: device ? screensInOrder.length : facts.screenCountByGroup.get(owner.id) ?? 0,
     state: states.get(screen.id)?.state ?? null,
   }
+}
+
+/** The Device or the Device Group a Screen belongs to, by id and name. */
+function ownerNamed(screen: Screen): { id: string, name: string } {
+  const group = screen.deviceGroup
+  return group ?? { id: screen.device!.id, name: screen.device!.name }
 }
 
 function toScheduledRenderRead(plugin: Plugin): ScheduledRenderRead | null {

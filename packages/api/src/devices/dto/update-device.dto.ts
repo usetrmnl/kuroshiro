@@ -1,7 +1,7 @@
 import type { ValidationArguments, ValidationOptions } from 'class-validator'
 import type { RotationMode, UpdateDeviceInput } from 'kuroshiro-shared'
 import { Transform } from 'class-transformer'
-import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, Min, registerDecorator, ValidateIf } from 'class-validator'
+import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, Max, Min, registerDecorator, ValidateIf } from 'class-validator'
 import { MAC_ADDRESS_PATTERN, REFRESH_RATE_MAX, REFRESH_RATE_MIN, ROTATION_MODES, SPECIAL_FUNCTIONS } from 'kuroshiro-shared'
 import { trimmed } from '../../utils/trimmed.js'
 
@@ -113,4 +113,8 @@ export class UpdateDeviceDto implements UpdateDeviceInput {
   @IsOptional()
   @IsString()
   targetFirmwareId?: string | null
+
+  @IsOptional()
+  @IsUUID()
+  deviceGroupId?: string | null
 }

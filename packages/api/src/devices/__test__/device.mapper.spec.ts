@@ -364,6 +364,7 @@ describe('toDeviceDetail', () => {
       targetFirmware: null,
       pending: { specialFunction: 'identify', deviceReset: false, deviceResetNewApikey: false, wipe: false, firmwarePush: false },
       sleepImagePath: null,
+      deviceGroup: null,
       lastWakeSource: null,
       sensors: [],
       screenCount: 0,

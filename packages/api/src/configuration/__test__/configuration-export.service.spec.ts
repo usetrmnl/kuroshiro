@@ -70,6 +70,7 @@ describe('configurationExportService', () => {
 
     pluginRepo.find.mockResolvedValue([])
     deviceRepo.find.mockResolvedValue([])
+    Object.assign(deviceRepo, { manager: { getRepository: () => ({ find: vi.fn().mockResolvedValue([]) }) } })
     screenRepo.find.mockResolvedValue([])
     devicePluginRepo.find.mockResolvedValue([])
     paletteRepo.find.mockResolvedValue([])
@@ -422,13 +423,13 @@ describe('configurationExportService', () => {
     const assignmentsJson = JSON.parse(zip.getEntry('assignments.json')!.getData().toString('utf8'))
 
     expect(pluginsJson[0].fieldValues).toEqual({ api_key: 'real-secret', city: 'Berlin' })
-    expect(assignmentsJson).toEqual([{ id: 'dp-1', deviceId: 'device-1', pluginId: 'plugin-1', order: 0, isActive: true }])
+    expect(assignmentsJson).toEqual([{ id: 'dp-1', deviceId: 'device-1', deviceGroupId: null, pluginId: 'plugin-1', order: 0, isActive: true }])
   })
 
   it('includes a file-type Screen\'s rendered image when it exists on disk', async () => {
     // Call order within exportToZip: buildManifest's getApiVersion() reads package.json first
-    // (delegated to the real fs), then addScreenImage reads this Screen's image second.
-    existsSyncMock.mockReturnValueOnce(true)
+    // (delegated to the real fs), then addScreenImage looks for this Screen's original (none here) and reads its image.
+    existsSyncMock.mockReturnValueOnce(false).mockReturnValueOnce(true)
     readFileSyncMock.mockImplementationOnce((...args: Parameters<typeof realFs.readFileSync>) => realFs.readFileSync(...args))
     readFileSyncMock.mockReturnValueOnce(Buffer.from('png-bytes'))
     const device = makeDevice({ id: 'device-1' })
@@ -438,6 +439,19 @@ describe('configurationExportService', () => {
     const buffer = await service.exportToZip()
     const zip = new AdmZip(buffer)
 
+    expect(zip.getEntry('screens/screen-1/sunset.png')?.getData().toString('utf8')).toBe('png-bytes')
+  })
+
+  it('includes a file-type Screen\'s retained original beside its converted image', async () => {
+    existsSyncMock.mockReturnValueOnce(true).mockReturnValueOnce(true)
+    readFileSyncMock.mockImplementationOnce((...args: Parameters<typeof realFs.readFileSync>) => realFs.readFileSync(...args))
+    readFileSyncMock.mockReturnValueOnce(Buffer.from('original-bytes')).mockReturnValueOnce(Buffer.from('png-bytes'))
+    const screen = makeScreen({ id: 'screen-1', device: makeDevice({ id: 'device-1' }), type: 'file', filename: 'sunset.png' })
+    screenRepo.find.mockResolvedValue([screen])
+
+    const zip = new AdmZip(await service.exportToZip())
+
+    expect(zip.getEntry('screens/screen-1.original')?.getData().toString('utf8')).toBe('original-bytes')
     expect(zip.getEntry('screens/screen-1/sunset.png')?.getData().toString('utf8')).toBe('png-bytes')
   })
 

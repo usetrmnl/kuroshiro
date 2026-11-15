@@ -5,9 +5,10 @@ import type { PluginRenderContext } from './plugin-template-context.service.js'
 import { Injectable, Logger } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { templateProblemOf } from 'kuroshiro-shared'
-import { Repository } from 'typeorm'
+import { IsNull, Not, Repository } from 'typeorm'
 import { DeviceModelsService } from '../../device-models/device-models.service.js'
 import { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
+import { Device } from '../../devices/devices.entity.js'
 import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { getErrorMessage } from '../../utils/getErrorMessage.js'
@@ -29,6 +30,11 @@ export class TemplateRenderError extends Error {
 @Injectable()
 export class PluginRenderCacheService {
   private mashupSlotRepository: Repository<MashupSlot>
+
+  private get deviceRepository(): Repository<Device> {
+    return this.screenRepository.manager.getRepository(Device)
+  }
+
   private readonly logger = new Logger(PluginRenderCacheService.name)
 
   constructor(
@@ -70,8 +76,8 @@ export class PluginRenderCacheService {
     const render = (deviceContext: PluginRenderContext['context']) => this.renderer.render(template.liquidMarkup, deviceContext).catch((error) => {
       throw new TemplateRenderError('full', error)
     })
-    const records = await this.deviceScreenRepository.find({ where: { screen: { plugin: { id: plugin.id } } }, relations: { device: true } })
-    if (records.length === 0)
+    const { records, hasScreenWithoutDevice } = await this.recordsToRender(plugin.id)
+    if (records.length === 0 || hasScreenWithoutDevice)
       await render(context)
 
     const rendered: Array<{ record: DeviceScreen, html: string }> = []
@@ -86,6 +92,26 @@ export class PluginRenderCacheService {
       await this.deviceScreenRepository.update(record.id, { cachedPluginOutput: html, renderSignal: null, generatedAt })
 
     await this.invalidateMashupCaches(plugin.id)
+  }
+
+  /**
+   * The record of every (Screen, Device) pair of the Plugin: each Device's own
+   * Screen with its Device, and a Device Group's Screen once per member, a
+   * record made for a member that has not met it yet. A Group Screen with no
+   * member has no pair, which `hasScreenWithoutDevice` says.
+   */
+  private async recordsToRender(pluginId: string): Promise<{ records: DeviceScreen[], hasScreenWithoutDevice: boolean }> {
+    const groupScreens = await this.screenRepository.find({ where: { plugin: { id: pluginId }, deviceGroup: { id: Not(IsNull()) } }, relations: { deviceGroup: true } })
+    let hasScreenWithoutDevice = false
+    for (const screen of groupScreens) {
+      const members = await this.deviceRepository.find({ where: { deviceGroup: { id: screen.deviceGroup!.id } } })
+      hasScreenWithoutDevice ||= members.length === 0
+      if (members.length > 0) {
+        await this.deviceScreenRepository.createQueryBuilder().insert().values(members.map(member => ({ device: { id: member.id }, screen: { id: screen.id }, isActive: false, generatedAt: new Date() }))).orIgnore().execute()
+      }
+    }
+    const records = await this.deviceScreenRepository.find({ where: { screen: { plugin: { id: pluginId } } }, relations: { device: true } })
+    return { records, hasScreenWithoutDevice }
   }
 
   async invalidateMashupCaches(pluginId: string): Promise<void> {

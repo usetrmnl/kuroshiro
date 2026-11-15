@@ -44,7 +44,7 @@ function makeRecord(overrides: Partial<Screen> & RecordFields = {}): DeviceScree
   const { isActive, generatedAt, cachedPluginOutput, renderSignal, ...screenFields } = overrides
   const screen = makeScreen(screenFields)
   const recordFields = { isActive, generatedAt, cachedPluginOutput, renderSignal }
-  return makeDeviceScreen({ screen, device: screen.device, ...Object.fromEntries(Object.entries(recordFields).filter(([, value]) => value !== undefined)) })
+  return makeDeviceScreen({ screen, device: screen.device!, ...Object.fromEntries(Object.entries(recordFields).filter(([, value]) => value !== undefined)) })
 }
 
 /** The record and its Screen as one flat bag, for building a sibling that differs in a few fields. */

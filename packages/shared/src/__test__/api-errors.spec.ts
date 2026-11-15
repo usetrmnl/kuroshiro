@@ -75,6 +75,9 @@ const wording: Record<ApiErrorCode, string> = {
   'picked-screen-mirrored': 'A mirrored Device has no Rotation to pick in.',
   'picked-screen-active': 'The Active Screen cannot be picked.',
   'picked-screen-ineligible': 'Rotation could not show that Screen at the next poll.',
+  'picked-screen-not-shown': 'This Device does not show that Screen.',
+  'device-group-not-found': 'There is no such Device Group.',
+  'device-group-name-taken': 'There is already a Device Group with that name.',
   'cross-site-request': 'Only the admin UI itself can make changes.',
 }
 
@@ -140,6 +143,9 @@ function wordingBySwitch(code: ApiErrorCode): string {
     case 'picked-screen-mirrored':
     case 'picked-screen-active':
     case 'picked-screen-ineligible':
+    case 'picked-screen-not-shown':
+    case 'device-group-not-found':
+    case 'device-group-name-taken':
     case 'cross-site-request':
     case 'conflict':
     case 'payload-too-large':

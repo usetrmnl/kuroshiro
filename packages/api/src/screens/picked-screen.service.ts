@@ -7,8 +7,10 @@ import { nextRotationAt } from '../devices/next-poll.js'
 import { ApiException } from '../errors/api.exception.js'
 import { isPassedOver } from '../schedule/rotation.js'
 import { DeviceScreen } from './device-screen.entity.js'
+import { ownerOfScreen, shownOwnerOf } from './screen-owner.js'
 import { rotationScreenOf } from './screen-states.js'
 import { Screen } from './screens.entity.js'
+import { shownRecordsOf } from './shown-records.js'
 
 /**
  * Sets and clears a Device's Picked Screen ("Show next" / "Back to Order").
@@ -32,11 +34,16 @@ export class PickedScreenService {
   async set(deviceId: string, screenId: string): Promise<void> {
     const device = await this.deviceOrRefuse(deviceId)
     const screen = await this.screenOrRefuse(screenId)
-    if (screen.device.id !== device.id)
+    if (screen.device && screen.device.id !== device.id)
       throw new ApiException(HttpStatus.BAD_REQUEST, 'picked-screen-wrong-device', 'That Screen does not belong to this Device.', { deviceId, screenId })
+    const shown = shownOwnerOf(device)
+    const owner = ownerOfScreen(screen)
+    if (owner.kind !== shown.kind || owner.id !== shown.id)
+      throw new ApiException(HttpStatus.CONFLICT, 'picked-screen-not-shown', 'This Device does not show that Screen.', { deviceId, screenId })
     if (device.mirrorEnabled)
       throw new ApiException(HttpStatus.CONFLICT, 'picked-screen-mirrored', 'A mirrored Device has no Rotation to pick in.', { deviceId })
-    const record = await this.deviceScreenRepository.findOneOrFail({ where: { device: { id: device.id }, screen: { id: screen.id } }, relations: { screen: { schedule: true } } })
+    const records = await shownRecordsOf({ screens: this.screenRepository, records: this.deviceScreenRepository }, device, { create: false })
+    const record = records.find(candidate => candidate.screen.id === screen.id)!
     if (record.isActive)
       throw new ApiException(HttpStatus.CONFLICT, 'picked-screen-active', 'The Active Screen cannot be picked.', { screenId })
     if (isPassedOver(rotationScreenOf(record), nextRotationAt(device, new Date())))
@@ -65,7 +72,7 @@ export class PickedScreenService {
 
   private async screenOrRefuse(screenId: string): Promise<Screen> {
     const screen = isUUID(screenId)
-      ? await this.screenRepository.findOne({ where: { id: screenId }, relations: { device: true } })
+      ? await this.screenRepository.findOne({ where: { id: screenId }, relations: { device: true, deviceGroup: true } })
       : null
     if (!screen)
       throw new ApiException(HttpStatus.NOT_FOUND, 'screen-not-found', 'Screen not found', { id: screenId })
