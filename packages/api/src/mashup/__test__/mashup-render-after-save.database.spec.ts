@@ -3,6 +3,8 @@ import type { DataSource } from 'typeorm'
 import type { DeviceModelsService } from '../../device-models/device-models.service.js'
 import type { HttpTestApp } from '../../test/httpApp.js'
 import type { MashupRendererService, RenderedMashup } from '../services/mashup-renderer.service.js'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { ConfigService } from '@nestjs/config'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Alert } from '../../alerts/entities/alert.entity.js'
@@ -13,6 +15,7 @@ import { Plugin } from '../../plugins/entities/plugin.entity.js'
 import { PluginFieldValuesService } from '../../plugins/services/plugin-field-values.service.js'
 import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { DeviceScreensController } from '../../screens/device-screens.controller.js'
+import { screenImagePath } from '../../screens/screen-image-paths.js'
 import { ScreenReadsService } from '../../screens/screen-reads.service.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { ScreensService } from '../../screens/screens.service.js'
@@ -26,8 +29,17 @@ import { MashupController } from '../mashup.controller.js'
 import { MashupService } from '../mashup.service.js'
 import { ScreenRenderService } from '../services/screen-render.service.js'
 
-vi.mock('../../device-models/render-html-to-png.js', () => ({ renderHtmlToPng: vi.fn().mockResolvedValue(null) }))
-vi.mock('../../utils/fileExists.js', () => ({ fileExists: vi.fn().mockResolvedValue(true) }))
+vi.mock('../../device-models/render-html-to-png.js', async () => {
+  const fs = await import('node:fs/promises')
+  const path = await import('node:path')
+  return {
+    renderHtmlToPng: vi.fn(async (_html: string, _target: unknown, outputPath: string) => {
+      await fs.mkdir(path.dirname(outputPath), { recursive: true })
+      await fs.writeFile(outputPath, 'image')
+      return null
+    }),
+  }
+})
 
 describe('a Mashup\'s image renders right after its save, against a real database', () => {
   let database: DataSource
@@ -86,6 +98,7 @@ describe('a Mashup\'s image renders right after its save, against a real databas
   afterAll(async () => {
     await http.app.close()
     await database.destroy()
+    await fs.rm(path.dirname(screenImagePath(device.id, '')), { recursive: true, force: true })
   })
 
   async function screenReadFor(screenId: string, deviceId: string): Promise<ScreenRead> {
