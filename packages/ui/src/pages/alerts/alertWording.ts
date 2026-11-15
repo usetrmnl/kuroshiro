@@ -4,7 +4,7 @@ import { devicePath } from '@/pages/devices/devicePaths'
 import { mono, sentence } from '@/pages/devices/sentence'
 import { resolvesAbove } from '@/pages/instance/instanceSettingWording'
 import { pluginPath } from '@/pages/plugins/pluginPaths'
-import { clockTime, exactTime } from '@/patterns/time'
+import { clockTime, exactTime, relativeTime } from '@/patterns/time'
 
 const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
@@ -61,6 +61,14 @@ const capitalised = (word: string) => `${word.charAt(0).toUpperCase()}${word.sli
 /** Since when a firing Alert fires: "since 08:10", "since yesterday, 21:35". */
 export function sinceWhen(openedAt: string, now: Date) {
   return `since ${midSentence(momentOf(new Date(openedAt), now))}`
+}
+
+/** When a firing Alert was last re-announced: "reminded 2 h ago", "reminded yesterday, 21:35". Nothing for one never reminded. */
+export function remindedWhen(remindedAt: string | null, now: Date) {
+  if (remindedAt === null)
+    return undefined
+  const at = new Date(remindedAt)
+  return `reminded ${relativeTime(at, now) ?? midSentence(momentOf(at, now))}`
 }
 
 /** When a resolved Alert fired and for how long: "Wednesday 02:10, for 1 h 30 min". */

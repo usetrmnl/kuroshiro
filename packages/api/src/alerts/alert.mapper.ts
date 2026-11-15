@@ -16,6 +16,7 @@ export function toAlertSummary(alert: Alert): AlertSummary | undefined {
     plugin,
     dataSource,
     openedAt: toIsoString(alert.openedAt),
+    remindedAt: toIsoStringOrNull(alert.remindedAt),
     resolvedAt: toIsoStringOrNull(alert.resolvedAt),
     details: alert.details ?? null,
   }

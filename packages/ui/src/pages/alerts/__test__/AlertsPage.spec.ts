@@ -105,6 +105,17 @@ describe('the Alerts page', () => {
     await expect.element(main(screen).getByRole('link', { name: 'Train departures · departures' })).toBeVisible()
   })
 
+  it('shows when a firing Alert was last reminded beside its since line, and nothing for one never reminded or already resolved', async () => {
+    const reminded = buildAlert({ ...OFFLINE_FIRING, remindedAt: '2026-10-03T05:35:00.000Z' })
+    const screen = await mountAlerts({ alerts: buildAlertsList({ active: [reminded, BATTERY_FIRING], resolved: [buildAlert({ ...BATTERY_RESOLVED, remindedAt: TODAY_0431 })] }) })
+
+    expect(rowsOf(screen, FIRING).map(row => row.when)).toEqual([
+      `since ${clock(TODAY_0610)} · reminded 2 h ago`,
+      `since yesterday, ${clock(YESTERDAY_1935)}`,
+    ])
+    expect(rowsOf(screen, RESOLVED).map(row => row.when)).toEqual([`Today ${clock(TODAY_0431)}, for 1 h 39 min`])
+  })
+
   it('lists what resolved in the last 7 days with the kind in the past, why it fired, when and for how long, and nothing in red', async () => {
     const screen = await mountAlerts({ alerts: buildAlertsList({ resolved: [BATTERY_RESOLVED, FETCH_RESOLVED, OFFLINE_RESOLVED] }) })
 
