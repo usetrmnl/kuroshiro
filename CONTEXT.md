@@ -8,6 +8,10 @@ Self-hosted BYOS (Bring Your Own Server) backend for TRMNL e-ink display devices
 A TRMNL e-ink display unit, or anything speaking its firmware's protocol, registered against this server and identified by its MAC address — whatever its letter case — and API key. Usually physical hardware, but a Device registered by hand or through the Device Simulator is a Device like any other.
 _Avoid_: Display (reserve "Display" for the API response type returned to the device)
 
+**Device Group**:
+A named set of Screens, with their Order and Schedules, that several Devices show together. A Device joins a Group as one of its settings; while a member it shows the Group's Screens, each rendered for its own Device Model and Palette, and walks the Order at its own pace with its own Active Screen and Picked Screen. Its own Screens are kept and inactive meanwhile and come back when it leaves; joining and leaving both reset its Rotation to the start of the Order. A Group has a unique name and nothing else of its own. Deleting a Group makes every member leave, then deletes the Group's Screens (ADR-0078).
+_Avoid_: Mirror (Mirroring is showing TRMNL's image), playlist, shared Device
+
 **Device Model**:
 The hardware class a Device belongs to — pixel dimensions, colour depth, rotation and rendering scale — which determines how images are generated for it. Every Device has exactly one Device Model, resolved from what the Device reports or chosen manually.
 _Avoid_: Model (bare, in prose), panel, profile, display type
@@ -25,15 +29,15 @@ One of the fixed physical colours a colour panel can print — black, white and 
 _Avoid_: Panel colour, hardware colour, ink colour (as a name for a Palette colour)
 
 **Screen**:
-A single unit of content assigned to a Device's rotation — a static image, an externally-fetched image, raw HTML, a plugin's rendered output, or a mashup. Screens belong to exactly one Device.
+A single unit of content assigned to a rotation — a static image, an externally-fetched image, raw HTML, a plugin's rendered output, or a mashup. Screens belong to exactly one Device or one Device Group; what is per Device about a Screen (its Active Screen mark, cached output, Render Signal, rendered image) lives on a record keyed by Device and Screen, one per Device that shows it (ADR-0078).
 _Avoid_: Slide, page
 
 **Order**:
-An integer position (1..N, sequential, no gaps) that determines a Screen's place in its Device's rotation. Reassigned to close gaps whenever screens are deleted, and fully reassigned when a Device's Screens are reordered.
+An integer position (1..N, sequential, no gaps) that determines a Screen's place in its owner's rotation, the owner being a Device or a Device Group. Reassigned to close gaps whenever screens are deleted, and fully reassigned when an owner's Screens are reordered.
 _Avoid_: Position, index, sequence number
 
 **Active Screen**:
-The one Screen per Device currently being shown (`isActive: true`). Not a fixed pointer — advances dynamically to the next eligible Screen by `order` each time the Device polls for its display, wrapping back to `order: 1` after the last screen. If no Screen on the Device can currently be shown (every Screen has a Schedule and none match, or every eligible Screen raises a `skip` Render Signal), there is no Active Screen — the Device gets the same no-screen Fallback Screen as a Device with zero Screens at all.
+The one Screen per Device currently being shown, a per-Device mark on a Screen, so two members of a Device Group can be on different Screens of the same set. Not a fixed pointer — advances dynamically to the next eligible Screen by `order` each time the Device polls for its display, wrapping back to `order: 1` after the last screen. If no Screen on the Device can currently be shown (every Screen has a Schedule and none match, or every eligible Screen raises a `skip` Render Signal), there is no Active Screen — the Device gets the same no-screen Fallback Screen as a Device with zero Screens at all.
 _Avoid_: Selected screen
 
 **Current Screen**:
@@ -41,7 +45,7 @@ What a Device is showing right now, as far as the server knows — the Active Sc
 _Avoid_: Active Screen (the Screen whose turn it is — the Current Screen is the image, and may not come from a Screen at all), on the panel (say "on the Device"), preview
 
 **Rotation**:
-The cycle through a Device's Screens in `order`, one step per `/display` poll — skipping any Screen currently ineligible per its Schedule, if it has one, and any Screen whose render raises a `skip` Render Signal. A Picked Screen replaces one step's Order.
+The cycle through the Screens a Device shows — its own, or its Device Group's while it is a member — in `order`, one step per `/display` poll — skipping any Screen currently ineligible per its Schedule, if it has one, and any Screen whose render raises a `skip` Render Signal. A Picked Screen replaces one step's Order.
 _Avoid_: Cycling, playlist (see Schedule below — the concept "playlist" usually points at is Schedule, not Rotation)
 
 **Wipe**:
@@ -153,7 +157,7 @@ One unit a Recipe Update Check can show and apply on its own: the Plugin's name,
 _Avoid_: Diff entry, change, hunk (that is a line-level thing inside a template's diff)
 
 **Configuration Archive**:
-A single zip holding every piece of admin-built configuration on a Kuroshiro instance — Plugins (as nested `.trmnlp` folders plus a manifest for what `.trmnlp` can't carry), Devices, Screens with their Order and Schedule, Mashups, Plugins with their Field Values, Plugin Assignments, custom Palettes, custom Firmware metadata and the overridden Instance Settings — stamped with the Kuroshiro version and an archive `schemaVersion`. Produced by Configuration Export, consumed by Configuration Import. Every record keeps its `id`, which is the identity Configuration Import upserts on. Contains secrets (Data Source headers, Device API keys, password-type Field Values, Webhook Tokens) in plaintext and the export surfaces warn about this, unless it is a Redacted Archive. Excludes runtime state: Webhook Payloads, Sensor readings, rendered images for `plugin`/`mashup`-type Screens, logs, Device telemetry, and anything `official`/`official-synced` — except a `file`-type Screen's converted image and a Device's own sleep image, each the actual admin-supplied content for that feature, not a regenerable cache; the sleep image's retained original travels too, so Configuration Import can reconvert it for the target's Device Model and Palette.
+A single zip holding every piece of admin-built configuration on a Kuroshiro instance — Plugins (as nested `.trmnlp` folders plus a manifest for what `.trmnlp` can't carry), Devices, Screens with their Order and Schedule, Mashups, Plugins with their Field Values, Plugin Assignments, custom Palettes, custom Firmware metadata and the overridden Instance Settings — stamped with the Kuroshiro version and an archive `schemaVersion`. Produced by Configuration Export, consumed by Configuration Import. Every record keeps its `id`, which is the identity Configuration Import upserts on. Contains secrets (Data Source headers, Device API keys, password-type Field Values, Webhook Tokens) in plaintext and the export surfaces warn about this, unless it is a Redacted Archive. Excludes runtime state: Webhook Payloads, Sensor readings, rendered images for `plugin`/`mashup`-type Screens, logs, Device telemetry, and anything `official`/`official-synced` — except a `file`-type Screen's converted image and a Device's own sleep image, each the actual admin-supplied content for that feature, not a regenerable cache; both retained originals travel too, so Configuration Import can reconvert them for the target's Device Model and Palette, or for every member of a Device Group. Device Groups travel with their Screens and memberships (ADR-0078).
 _Avoid_: Backup (reserve for `pg_dump`-level disaster recovery, which this does not replace), dump, snapshot, `.trmnlp` (that is one Plugin's export, which the archive nests but is not)
 
 **Configuration Export**:
@@ -173,7 +177,7 @@ Restoring a Configuration Archive onto an instance: an upsert of every record by
 _Avoid_: Restore (bare, in prose — reserve for the ADR's "restore targets a fresh instance" framing), sync
 
 **Showcase Archive**:
-The Configuration Archive committed to the repo (ADR-0042) and authored from scratch, never copied from a live instance — a Device, Screens, a Mashup, a Schedule and Poll Plugins reading only public APIs or literal values. `ShowcaseSeedService` imports it through Configuration Import on an application bootstrap where `demo_mode` is on and the Device and Plugin tables are both empty; any other boot is a no-op. Written as TypeScript literals rather than a committed `.zip` or folder of files, since the build has no step to copy non-code assets into the bundle.
+The Configuration Archive committed to the repo (ADR-0042) and authored from scratch, never copied from a live instance — a Device, Screens, a Mashup, a Schedule, a Device Group of two Devices and Poll Plugins reading only public APIs or literal values. `ShowcaseSeedService` imports it through Configuration Import on an application bootstrap where `demo_mode` is on and the Device and Plugin tables are both empty; any other boot is a no-op. Written as TypeScript literals rather than a committed `.zip` or folder of files, since the build has no step to copy non-code assets into the bundle.
 _Avoid_: Demo data, seed data, fixtures (reserve for test fixtures), sample archive
 
 **Special Function**:

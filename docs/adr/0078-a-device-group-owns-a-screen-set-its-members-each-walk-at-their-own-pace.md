@@ -1,0 +1,30 @@
+# A Device Group owns a Screen set its members each walk at their own pace
+
+ADR-0008 cut "device grouping" from Screen Playlists v1 and said it should be filed on its own; #1786 files it. An operator with two or three Devices showing the same content today edits the same Screens, Order and Schedules on each Device, and the README and the comparison page name the gap. The grilling settled the following.
+
+**A Device Group owns a Screen set: Screens, their Order and their Schedules. Devices join it and show those Screens, each rendered for its own Device Model and Palette, each walking the Order at its own pace. The per-Device runtime of a Screen moves off the Screen row onto a record keyed by Device and Screen, for grouped and ungrouped Screens alike.**
+
+- **The name is Device Group.** Not "mirror": Mirroring already means showing TRMNL's image for a Device (ADR-0008's naming trap). Not "playlist": that word points at Schedule in this glossary. A Group has a unique name and nothing else of its own; everything visual is a member's.
+- **A Screen belongs to exactly one Device or one Device Group.** The Screen row carries a nullable Device and a nullable Device Group, exactly one set. Order is per owner, 1..N without gaps as today.
+- **What is per Device stays per Device.** The Active Screen mark, the cached Plugin output, the Render Signal, `generatedAt` and the rendered image of a Screen live on a per-Device record keyed by (Device, Screen). An ungrouped Screen has exactly one record; a Group Screen has one per member. Rotation, `/display`, the scheduled render and the admin read models read and write the record and never a Screen column, so there is one code path. Picked Screen, Manual Rotation, Current Screen, Mirroring, Sleep Mode and Firmware are Device settings and do not change; a mirrored Device in a Group shows the mirror.
+- **Rendering is per (Screen, Device) pair.** ADR-0069's "rendered once per Screen, told its Device" becomes once per record: a Plugin's data is fetched once per tick and its Template rendered once for every Device that shows a Screen of it, each output cached to that pair's record. A Group Screen with no member is still rendered once without a Device so a broken Template is reported. Mashup slots render the same way.
+- **Joining parks a Device's own Screens; leaving brings them back; nothing is deleted by a membership change.** Membership is a Device setting. Joining and leaving both reset the Device's Rotation state: its Picked Screen is cleared, no Screen is marked active, and the next poll starts the new owner's Order from 1 and renders each Screen fresh for this Device. The records of the parked own Screens are kept but ignored while the Device is grouped. Deleting a Group makes every member leave first and then deletes the Group's Screens.
+- **Mixed Device Models are allowed, and a file Screen keeps its original.** A file Screen's uploaded original is stored under its owner and converted once per member for that member's Device Model and Palette, as the sleep image is converted per Device today. A member's Model or Palette change reconverts from the original for that member only, which also closes #1675's remaining gap for file Screens. The original travels in the Configuration Archive for every file Screen, under a `schemaVersion` bump, so Configuration Import can reconvert it for the target.
+- **The admin API changes shape.** Adding a Screen names an owner (a Device or a Device Group) instead of a Device; a Group's Screens are listed with every member's state; a Device's Screens are listed as the Screens it shows, its Group's when grouped, with that Device's state. Existing Screens are migrated onto their Device's record, nothing a Device shows changes, and the Device-facing `/display` and `/current_screen` routes are untouched. The admin UI in this repo is the API's only consumer, so the break is taken rather than a parallel set of routes kept.
+
+## Considered options
+
+- **A per-Device record only for Group Screens**, leaving the columns on ungrouped Screens. Rejected: a smaller migration, but Rotation and rendering branch on whether a Screen is grouped forever.
+- **Every Device gets an implicit personal Group**, so Screens only ever belong to Groups. Rejected: the cleanest model, but it reshapes the archive, every Screen route and the Devices UI at once, for a distinction an operator with one Device never sees.
+- **A separate Screen Set entity** that both a Device and a Group point at. Rejected: an indirection only Groups need, and a glossary term with no screen of its own.
+- **Remembering the own-Screen position** across join and leave. Rejected: more state for a rare path; a Device that leaves starts its own Order from 1.
+- **Mirroring the Device Screen routes under `/device-groups`** to stay non-breaking. Rejected: duplicated controllers and tests for an API whose only consumer ships in the same PR.
+
+## Consequences
+
+- A tick costs one Liquid render per (Screen, Device) pair; two members of a Group can cache different output of one Screen, as two Screens of one Plugin can today.
+- Image paths are keyed by Device and Screen for the converted image and by owner and Screen for a retained original; a Group's file Screen stores one original and one converted image per member.
+- The Configuration Archive gains Device Groups, an owner on each Screen, a Group on each Device and the retained original of every file Screen, under a new `schemaVersion`; older archives still import with every Screen Device-owned.
+- The Showcase Archive gains a Device Group, so the demo instance shows one and the site tour can picture it.
+- ADR-0008's device-grouping bullet and ADR-0069's "cached to its own Screen" are superseded in part by this ADR; the rest of both stands.
+- Delivered in slices (#1791 this ADR, #1792 the record, #1793 the API and archive, #1794 the UI, #1795 showcase and public copy); the API slice ships as a breaking change whose release note announces the feature.
