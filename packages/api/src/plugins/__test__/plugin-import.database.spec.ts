@@ -12,6 +12,7 @@ import { Alert } from '../../alerts/entities/alert.entity.js'
 import { createNoSensorsService } from '../../device-sensors/__test__/mockDeviceSensorsService.js'
 import { Device } from '../../devices/devices.entity.js'
 import { InstanceTimeZone } from '../../instance/instance-time-zone.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { stubFetch } from '../../test/fetch.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
@@ -98,7 +99,7 @@ describe('importing a Plugin, against a real database', () => {
     const fieldValues = new PluginFieldValuesService(database.getRepository(PluginFieldValue), database.getRepository(PluginField))
     const config = asService<ConfigService>({ get: () => false, getOrThrow: () => API_URL })
     const resolver = new PluginDataResolverService(new PluginDataFetcherService(renderer, config, new InstanceTimeZone()), new PluginTransformService())
-    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
+    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), database.getRepository(DeviceScreen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
     const refresh = new PluginRefreshService(renderCache, new PluginTemplateContextService(fieldValues, resolver, new InstanceTimeZone(), new PluginDataSourceStateService(database.getRepository(PluginDataSource))), new DataSourceFetchOutcomeService(database.getRepository(PluginDataSource)), new PluginDataSourceStateService(database.getRepository(PluginDataSource)), database.getRepository(Plugin))
     scheduler = new PluginSchedulerService(refresh)
     const assignments = new PluginAssignmentsService(database.getRepository(Plugin), database.getRepository(Device), database.getRepository(DevicePlugin))
@@ -118,7 +119,7 @@ describe('importing a Plugin, against a real database', () => {
       controllers: [PluginsController],
       providers: [
         { provide: PluginsService, useValue: plugins },
-        { provide: PluginReadsService, useValue: new PluginReadsService(database.getRepository(Plugin), database.getRepository(Screen), database.getRepository(Alert), fieldValues, config) },
+        { provide: PluginReadsService, useValue: new PluginReadsService(database.getRepository(Plugin), database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Alert), fieldValues, config) },
         { provide: PluginPreviewDataService, useValue: asService<PluginPreviewDataService>({}) },
         { provide: PluginAssignmentsService, useValue: assignments },
         { provide: PluginImporterService, useValue: new PluginImporterService() },
@@ -163,17 +164,21 @@ describe('importing a Plugin, against a real database', () => {
 
   async function addKitchenWithTwoScreens(): Promise<Device> {
     const kitchen = await database.getRepository(Device).save({ name: 'Kitchen', friendlyId: 'KITCHN', mac: 'AA:BB:CC:DD:EE:01', apikey: 'device-secret', refreshRate: 300 })
-    const screen = { type: 'html' as const, html: '<p>Hi</p>', fetchManual: false, generatedAt: new Date(), device: kitchen }
-    await database.getRepository(Screen).save([
-      { ...screen, filename: 'Welcome', order: 1, isActive: true },
-      { ...screen, filename: 'Notes', order: 2, isActive: false },
+    const screen = { type: 'html' as const, html: '<p>Hi</p>', fetchManual: false, device: kitchen }
+    const [welcome, notes] = await database.getRepository(Screen).save([
+      { ...screen, filename: 'Welcome', order: 1 },
+      { ...screen, filename: 'Notes', order: 2 },
+    ])
+    await database.getRepository(DeviceScreen).save([
+      { device: kitchen, screen: welcome, isActive: true, generatedAt: new Date() },
+      { device: kitchen, screen: notes, isActive: false, generatedAt: new Date() },
     ])
     return kitchen
   }
 
   async function screensOf(device: Device): Promise<Array<{ id: string, isActive: boolean }>> {
-    const screens = await database.getRepository(Screen).find({ where: { device: { id: device.id } }, order: { order: 'ASC' } })
-    return screens.map(({ id, isActive }) => ({ id, isActive }))
+    const records = await database.getRepository(DeviceScreen).find({ where: { device: { id: device.id } }, relations: { screen: true }, order: { screen: { order: 'ASC' } } })
+    return records.map(({ screen, isActive }) => ({ id: screen.id, isActive }))
   }
 
   describe('from a file, POST /api/plugins/import', () => {

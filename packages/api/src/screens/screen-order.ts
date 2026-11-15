@@ -1,15 +1,17 @@
 import type { DeepPartial, EntityManager } from 'typeorm'
+import { DeviceScreen } from './device-screen.entity.js'
 import { Screen } from './screens.entity.js'
 
-type NewScreen = Omit<DeepPartial<Screen>, 'device' | 'order' | 'isActive'>
+type NewScreen = Omit<DeepPartial<Screen>, 'device' | 'order'>
 
 async function screensInOrder(manager: EntityManager, deviceId: string): Promise<Screen[]> {
   return manager.getRepository(Screen).find({ where: { device: { id: deviceId } }, order: { order: 'ASC' } })
 }
 
 /**
- * How every new Screen enters a Device, whatever its kind: last in the Order
- * and not the Active Screen, so adding never changes what the Device shows.
+ * How every new Screen enters a Device, whatever its kind: last in the Order,
+ * with its record for the Device and not the Active Screen, so adding never
+ * changes what the Device shows.
  *
  * Locks the Device's row for the rest of the (possibly just-opened)
  * transaction first, so two concurrent adds to the same Device read the
@@ -21,14 +23,14 @@ export async function joinEndOfOrder(manager: EntityManager, deviceId: string, s
     await manager.query('SELECT 1 FROM "device" WHERE "id" = $1 FOR UPDATE', [deviceId])
     const screens = manager.getRepository(Screen)
     const lastOrder = await screens.maximum('order', { device: { id: deviceId } }) ?? 0
-    return screens.save(screens.create({
+    const saved = await screens.save(screens.create({
       fetchManual: false,
-      generatedAt: new Date(),
       ...screen,
       device: { id: deviceId },
       order: lastOrder + 1,
-      isActive: false,
     }))
+    await manager.getRepository(DeviceScreen).insert({ device: { id: deviceId }, screen: { id: saved.id }, isActive: false, generatedAt: new Date() })
+    return saved
   })
 }
 

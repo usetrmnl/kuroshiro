@@ -12,6 +12,7 @@ import { InstanceTimeZone } from '../../instance/instance-time-zone.js'
 import { MashupConfiguration } from '../../mashup/entities/mashup-configuration.entity.js'
 import { MashupSlot } from '../../mashup/entities/mashup-slot.entity.js'
 import { Schedule } from '../../schedule/schedule.entity.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { stubFetch } from '../../test/fetch.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
@@ -78,7 +79,7 @@ describe('the Plugin reads, GET /api/plugins and GET /api/plugins/:id, against a
     const config = asService<ConfigService>({ get: () => false, getOrThrow: () => API_URL })
     const resolver = new PluginDataResolverService(new PluginDataFetcherService(renderer, config, new InstanceTimeZone()), new PluginTransformService())
     const templateContext = new PluginTemplateContextService(fieldValues, resolver, new InstanceTimeZone(), new PluginDataSourceStateService(database.getRepository(PluginDataSource)))
-    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
+    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), database.getRepository(DeviceScreen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
     refresh = new PluginRefreshService(renderCache, templateContext, new DataSourceFetchOutcomeService(database.getRepository(PluginDataSource)), new PluginDataSourceStateService(database.getRepository(PluginDataSource)), database.getRepository(Plugin))
     scheduler = new PluginSchedulerService(refresh)
     assignments = new PluginAssignmentsService(database.getRepository(Plugin), database.getRepository(Device), database.getRepository(DevicePlugin))
@@ -93,7 +94,7 @@ describe('the Plugin reads, GET /api/plugins and GET /api/plugins/:id, against a
       fieldValues,
       assignments,
     )
-    const reads = new PluginReadsService(database.getRepository(Plugin), database.getRepository(Screen), database.getRepository(Alert), fieldValues, config)
+    const reads = new PluginReadsService(database.getRepository(Plugin), database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Alert), fieldValues, config)
 
     http = await createHttpTestApp({
       controllers: [PluginsController, WebhookIngestController],
@@ -130,8 +131,10 @@ describe('the Plugin reads, GET /api/plugins and GET /api/plugins/:id, against a
     return database.getRepository(Device).save({ name, friendlyId: `DEV${deviceCount}`, mac: `AA:BB:CC:DD:EE:${String(deviceCount).padStart(2, '0')}`, apikey: `device-secret-${deviceCount}`, mirrorApikey: 'mirror-secret', refreshRate: 300, ...overrides })
   }
 
-  async function addScreen(device: Device, order: number, overrides: DeepPartial<Screen> = {}): Promise<Screen> {
-    return database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, isActive: false, fetchManual: false, generatedAt: new Date(), device, ...overrides })
+  async function addScreen(device: Device, order: number, overrides: DeepPartial<Screen> = {}, record: Partial<DeviceScreen> = {}): Promise<Screen> {
+    const screen = await database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, fetchManual: false, device, ...overrides })
+    await database.getRepository(DeviceScreen).save({ isActive: false, generatedAt: new Date(), ...record, device, screen })
+    return screen
   }
 
   async function addMashup(device: Device, name: string, order: number, pluginIds: string[]): Promise<Screen> {
@@ -260,7 +263,7 @@ describe('the Plugin reads, GET /api/plugins and GET /api/plugins/:id, against a
       const [kitchen, hall, attic] = [await addDevice('Kitchen'), await addDevice('Hall'), await addDevice('Attic')]
       const plugin = await createPollPlugin()
       const other = await createPollPlugin({ name: 'Other' })
-      await addScreen(kitchen, 1, { isActive: true })
+      await addScreen(kitchen, 1, {}, { isActive: true })
       const onKitchen = await assignments.assign(plugin.id, kitchen.id)
       await addScreen(kitchen, 3)
       const onHall = await assignments.assign(plugin.id, hall.id)

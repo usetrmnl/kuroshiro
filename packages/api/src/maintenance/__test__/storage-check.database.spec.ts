@@ -12,6 +12,7 @@ import { FALLBACK_SCREEN_TEMPLATE_VERSION } from '../../device-models/fallback-s
 import { fallbackRenderPairFolder } from '../../device-models/fallback-screens.service.js'
 import { PaletteSelectionService } from '../../device-models/palette-selection.service.js'
 import { Device } from '../../devices/devices.entity.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { ScreensService } from '../../screens/screens.service.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
@@ -42,6 +43,7 @@ describe('the stored-files check and its cleanup, against a real database and re
     const deviceModels = new DeviceModelsService(database.getRepository(DeviceModel), new PaletteSelectionService(database.getRepository(Palette)))
     const screens = new ScreensService(
       database.getRepository(Screen),
+      database.getRepository(DeviceScreen),
       database.getRepository(Device),
       asService<ConfigService>({ get: vi.fn() }),
       deviceModels,

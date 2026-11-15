@@ -6,12 +6,15 @@ import type { Screen } from './screens.entity.js'
 import { MASHUP_LAYOUTS } from 'kuroshiro-shared'
 import { mashupDither } from '../mashup/mashup-dither.js'
 import { toImagePath, toIsoString, toIsoStringOrNull } from '../utils/readModel.js'
+import { screenImageUrlPath } from './screen-image-paths.js'
 import { screenNameOf } from './screen-name.js'
 
 export interface ScreenFacts {
   deviceId: string
   state: ScreenStateRead
   renderSignal: RenderSignal | null
+  /** When the Device's record of the Screen was last rendered or converted. */
+  generatedAt: Date
   /** Whether the Screen's rendered image is on disk. */
   isRendered: boolean
   requiredFieldEmpty: boolean
@@ -96,8 +99,8 @@ export function toScreenRead(screen: Screen, facts: ScreenFacts): ScreenRead {
     stateCause: facts.state.stateCause,
     picked: facts.state.picked,
     renderSignal: facts.renderSignal,
-    imagePath: facts.isRendered ? toImagePath(`/screens/devices/${facts.deviceId}/${screen.id}.png`, screen.generatedAt) : null,
-    renderedAt: facts.isRendered ? toIsoString(screen.generatedAt) : null,
+    imagePath: facts.isRendered ? toImagePath(screenImageUrlPath(facts.deviceId, screen.id), facts.generatedAt) : null,
+    renderedAt: facts.isRendered ? toIsoString(facts.generatedAt) : null,
     schedule: screen.schedule ? toScheduleRead(screen.schedule) : null,
     plugin: kind === 'plugin' ? toPluginReference(screen, facts) : null,
     mashup: kind === 'mashup' ? toMashupRead(screen.mashupConfiguration) : null,

@@ -7,6 +7,7 @@ import { isUUID } from 'class-validator'
 import { In, IsNull, Repository } from 'typeorm'
 import { Alert } from '../../alerts/entities/alert.entity.js'
 import { ApiException } from '../../errors/api.exception.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { Plugin } from '../entities/plugin.entity.js'
 import { compareIgnoringCase, toPluginDetail, toPluginSummary } from '../plugin.mapper.js'
@@ -28,6 +29,8 @@ export class PluginReadsService {
     private readonly pluginRepository: Repository<Plugin>,
     @InjectRepository(Screen)
     private readonly screenRepository: Repository<Screen>,
+    @InjectRepository(DeviceScreen)
+    private readonly deviceScreenRepository: Repository<DeviceScreen>,
     @InjectRepository(Alert)
     private readonly alertRepository: Repository<Alert>,
     private readonly fieldValues: PluginFieldValuesService,
@@ -92,15 +95,16 @@ export class PluginReadsService {
     })
   }
 
-  private async screensInOrderByDevice(deviceIds: string[]): Promise<Map<string, Screen[]>> {
+  /** Each Device's record of each of its Screens, in the Screens' Order. */
+  private async screensInOrderByDevice(deviceIds: string[]): Promise<Map<string, DeviceScreen[]>> {
     if (deviceIds.length === 0)
       return new Map()
 
-    const screens = await this.screenRepository.find({
+    const records = await this.deviceScreenRepository.find({
       where: { device: { id: In(deviceIds) } },
-      relations: { device: true, schedule: true },
-      order: { order: 'ASC' },
+      relations: { device: true, screen: { schedule: true } },
+      order: { screen: { order: 'ASC' } },
     })
-    return groupedBy(screens, screen => [screen.device.id])
+    return groupedBy(records, record => [record.device.id])
   }
 }

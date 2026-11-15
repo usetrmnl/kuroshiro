@@ -25,7 +25,8 @@ describe('joinEndOfOrder', () => {
 
     expect(calls).toEqual(['lock', 'read-max', 'save'])
     expect(screensRepo.manager.query).toHaveBeenCalledWith('SELECT 1 FROM "device" WHERE "id" = $1 FOR UPDATE', [DEVICE_ID])
-    expect(screen).toMatchObject({ order: 3, isActive: false, type: 'html', html: 'hi' })
+    expect(screen).toMatchObject({ order: 3, type: 'html', html: 'hi' })
+    expect(screensRepo.insert).toHaveBeenCalledWith(expect.objectContaining({ device: { id: DEVICE_ID }, isActive: false }))
   })
 
   it('runs inside the transaction already open when the manager given is itself transactional', async () => {

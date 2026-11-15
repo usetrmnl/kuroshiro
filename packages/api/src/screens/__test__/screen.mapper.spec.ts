@@ -10,6 +10,7 @@ const WAITING_ITS_TURN: ScreenFacts = {
   deviceId: 'device-1',
   state: { state: null, stateCause: null, picked: false },
   renderSignal: null,
+  generatedAt: RENDERED_AT,
   isRendered: true,
   requiredFieldEmpty: false,
   fetchAlertFiring: false,
@@ -17,7 +18,7 @@ const WAITING_ITS_TURN: ScreenFacts = {
 
 describe('toScreenRead', () => {
   it('reads a File Screen with every key present and what does not apply as null', () => {
-    const screen = makeScreen({ id: 'screen-photo', type: 'file', filename: 'Photo', order: 2, generatedAt: RENDERED_AT, fileUploadedAt: UPLOADED_AT })
+    const screen = makeScreen({ id: 'screen-photo', type: 'file', filename: 'Photo', order: 2, fileUploadedAt: UPLOADED_AT })
 
     expect(JSON.parse(JSON.stringify(toScreenRead(screen, WAITING_ITS_TURN)))).toEqual({
       id: 'screen-photo',
@@ -48,7 +49,7 @@ describe('toScreenRead', () => {
   })
 
   it('reads a File Screen whose upload time was never stored as null, unlike its render time', () => {
-    const screen = makeScreen({ type: 'file', generatedAt: RENDERED_AT })
+    const screen = makeScreen({ type: 'file' })
 
     expect(toScreenRead(screen, WAITING_ITS_TURN).file).toMatchObject({ uploadedAt: null })
   })
@@ -66,7 +67,7 @@ describe('toScreenRead', () => {
   })
 
   it('reads a Screen never rendered without an image or a render time, although its creation time is stored', () => {
-    const read = toScreenRead(makeScreen({ type: 'html', html: '<p>Hi</p>', generatedAt: RENDERED_AT }), { ...WAITING_ITS_TURN, isRendered: false })
+    const read = toScreenRead(makeScreen({ type: 'html', html: '<p>Hi</p>' }), { ...WAITING_ITS_TURN, isRendered: false })
 
     expect(read).toMatchObject({ imagePath: null, renderedAt: null })
   })

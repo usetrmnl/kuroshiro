@@ -15,6 +15,7 @@ import { offlineRule } from '../../alerts/rules/offline.rule.js'
 import { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
 import { DeviceSensor } from '../../device-sensors/entities/device-sensor.entity.js'
 import { Plugin } from '../../plugins/entities/plugin.entity.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
 import { createMockDeviceModelsService, createMockFallbackScreensService, createMockPaletteSelectionService, primeMockDeviceModelsService, primeMockFallbackScreensService } from '../../test/mockDeviceModelsService.js'
@@ -42,6 +43,7 @@ describe('the Device reads against a real database', () => {
     database = await createTestDatabase()
     const devices = database.getRepository(Device)
     const screens = database.getRepository(Screen)
+    const deviceScreens = database.getRepository(DeviceScreen)
     const deviceModels = createMockDeviceModelsService()
     const paletteSelection = createMockPaletteSelectionService()
     const fallbackScreens = createMockFallbackScreensService()
@@ -53,7 +55,7 @@ describe('the Device reads against a real database', () => {
     http = await createHttpTestApp({
       controllers: [DevicesController, DisplayController, SetupController],
       providers: [
-        { provide: DeviceReadsService, useValue: new DeviceReadsService(devices, screens, deviceSensors) },
+        { provide: DeviceReadsService, useValue: new DeviceReadsService(devices, screens, deviceScreens, deviceSensors) },
         { provide: DevicesService, useValue: new DevicesService(devices, asService<DeviceModelsService>(deviceModels), asService<PaletteSelectionService>(paletteSelection), firmware, asService<ScreensService>({}), asService<DeviceSleepImageService>({ reconvert: vi.fn() })) },
         { provide: DeviceSetupService, useValue: new DeviceSetupService(devices, asService<DeviceModelsService>(deviceModels), asService<FallbackScreensService>(fallbackScreens)) },
         {
@@ -61,6 +63,7 @@ describe('the Device reads against a real database', () => {
           useValue: new DeviceDisplayService(
             devices,
             screens,
+            deviceScreens,
             asService<ConfigService>({ get: () => 'http://api' }),
             asService<DeviceModelsService>(deviceModels),
             asService<FallbackScreensService>(fallbackScreens),
@@ -90,13 +93,19 @@ describe('the Device reads against a real database', () => {
     return database.getRepository(Device).findOneByOrFail({ mac })
   }
 
+  /** The Device's record of the Screen, rendered at a fixed time and not the Active Screen. */
+  async function withRecord(screen: Screen, device: Device): Promise<Screen> {
+    await database.getRepository(DeviceScreen).save({ device, screen, isActive: false, generatedAt: new Date('2026-03-01T09:30:00.000Z') })
+    return screen
+  }
+
   async function addScreen(device: Device, name: string): Promise<Screen> {
-    return database.getRepository(Screen).save({ type: 'file', filename: name, order: 0, isActive: false, fetchManual: false, generatedAt: new Date('2026-03-01T09:30:00.000Z'), device })
+    return withRecord(await database.getRepository(Screen).save({ type: 'file', filename: name, order: 0, fetchManual: false, device }), device)
   }
 
   async function addPluginScreen(device: Device, pluginName: string): Promise<Screen> {
     const plugin = await database.getRepository(Plugin).save({ name: pluginName })
-    return database.getRepository(Screen).save({ type: 'plugin', filename: null, plugin, order: 0, isActive: false, fetchManual: false, generatedAt: new Date('2026-03-01T09:30:00.000Z'), device })
+    return withRecord(await database.getRepository(Screen).save({ type: 'plugin', filename: null, plugin, order: 0, fetchManual: false, device }), device)
   }
 
   async function readList(): Promise<DeviceSummary[]> {

@@ -3,6 +3,7 @@ import type { MockInstance } from 'vitest'
 import type { DeviceModelsService } from '../../device-models/device-models.service.js'
 import type { Device } from '../../devices/devices.entity.js'
 import type { MockDeviceModelsService } from '../../test/mockDeviceModelsService.js'
+import type { DeviceScreen } from '../device-screen.entity.js'
 import type { Screen } from '../screens.entity.js'
 import * as fs from 'node:fs'
 import { Logger } from '@nestjs/common'
@@ -30,6 +31,7 @@ const SCREEN_ID = '11111111-1111-4111-8111-111111111111'
 describe('screensService', () => {
   let service: ScreensService
   let screensRepo: ReturnType<typeof createMockTransactionalRepository<Screen>>
+  let deviceScreensRepo: ReturnType<typeof createMockRepository<DeviceScreen>>
   let devicesRepo: ReturnType<typeof createMockRepository<Device>>
   let unlinkMock: MockInstance<typeof fs.promises.unlink>
   let deviceModels: MockDeviceModelsService
@@ -37,15 +39,22 @@ describe('screensService', () => {
 
   beforeEach(() => {
     screensRepo = createMockTransactionalRepository<Screen>()
+    deviceScreensRepo = createMockRepository<DeviceScreen>()
     devicesRepo = createMockRepository<Device>()
     deviceModels = createMockDeviceModelsService()
     service = new ScreensService(
       asRepository(screensRepo),
+      asRepository(deviceScreensRepo),
       asRepository(devicesRepo),
       asService<ConfigService>(mockConfigService),
       asService<DeviceModelsService>(deviceModels),
     )
     vi.resetAllMocks()
+    // Dropping the renders is one `UPDATE ... WHERE screenId IN (subquery)`, built through the query builder.
+    const update = { update: vi.fn(), set: vi.fn(), where: vi.fn(), execute: vi.fn().mockResolvedValue(undefined) }
+    for (const chained of [update.update, update.set, update.where])
+      chained.mockReturnValue(update)
+    Object.assign(deviceScreensRepo, { createQueryBuilder: vi.fn(() => update) })
     primeMockDeviceModelsService(deviceModels)
     unlinkMock = vi.spyOn(fs.promises, 'unlink').mockResolvedValue(undefined)
   })
@@ -71,8 +80,8 @@ describe('screensService', () => {
       const sources = vi.mocked(convertToPng).mock.calls.map(call => call[0].split('/').pop())
       expect(sources).toEqual(['upload.original', 'legacy.png', 'cached.original'])
       expect(renameMock).toHaveBeenCalledWith(expect.stringContaining('tmp-upload.png'), expect.stringContaining('/upload.png'))
-      expect(screensRepo.update).toHaveBeenCalledWith({ id: 'upload' }, { generatedAt: expect.any(Date) })
-      expect(screensRepo.update).not.toHaveBeenCalledWith({ id: 'live' }, expect.anything())
+      expect(deviceScreensRepo.update).toHaveBeenCalledWith({ device: { id: 'dev' }, screen: { id: 'upload' } }, { generatedAt: expect.any(Date) })
+      expect(deviceScreensRepo.update).not.toHaveBeenCalledWith({ device: { id: 'dev' }, screen: { id: 'live' } }, expect.anything())
     })
 
     it('keeps going when one screen fails to convert, cleaning up its temp file', async () => {
@@ -95,7 +104,7 @@ describe('screensService', () => {
       await expect(service.redrawForRenderTarget(device)).resolves.toBe(0)
       expect(warned).toHaveBeenCalledWith('No image to reconvert for screen gone')
       expect(convertToPng).not.toHaveBeenCalled()
-      expect(screensRepo.update).not.toHaveBeenCalledWith({ id: 'gone' }, expect.anything())
+      expect(deviceScreensRepo.update).not.toHaveBeenCalledWith({ device: { id: 'dev' }, screen: { id: 'gone' } }, expect.anything())
       warned.mockRestore()
     })
   })

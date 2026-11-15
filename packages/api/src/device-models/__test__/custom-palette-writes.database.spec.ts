@@ -12,6 +12,7 @@ import { Device } from '../../devices/devices.entity.js'
 import { PluginFieldValue } from '../../plugins/entities/plugin-field-value.entity.js'
 import { PluginField } from '../../plugins/entities/plugin-field.entity.js'
 import { PluginFieldValuesService } from '../../plugins/services/plugin-field-values.service.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { DeviceScreensController } from '../../screens/device-screens.controller.js'
 import { ScreenReadsService } from '../../screens/screen-reads.service.js'
 import { Screen } from '../../screens/screens.entity.js'
@@ -62,10 +63,10 @@ describe('creating, changing and deleting a custom Palette, against a real datab
     const paletteSelection = new PaletteSelectionService(database.getRepository(Palette))
     const deviceModels = new DeviceModelsService(database.getRepository(DeviceModel), paletteSelection)
     const reads = new DeviceModelReadsService(database.getRepository(Device), deviceModels, paletteSelection, new SyncRunService(database.getRepository(SyncRun)))
-    screens = new ScreensService(database.getRepository(Screen), database.getRepository(Device), asService<ConfigService>({ get: () => false }), deviceModels)
+    screens = new ScreensService(database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Device), asService<ConfigService>({ get: () => false }), deviceModels)
     customPalettes = new CustomPalettesService(database.getRepository(Palette), database.getRepository(Device), paletteSelection, screens, asService<DeviceSleepImageService>(sleepImage))
     const fieldValues = new PluginFieldValuesService(database.getRepository(PluginFieldValue), database.getRepository(PluginField))
-    const screenReads = new ScreenReadsService(database.getRepository(Screen), database.getRepository(Device), database.getRepository(Alert), fieldValues)
+    const screenReads = new ScreenReadsService(database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Device), database.getRepository(Alert), fieldValues)
 
     http = await createHttpTestApp({
       controllers: [CustomPalettesController, DeviceScreensController],
@@ -114,7 +115,8 @@ describe('creating, changing and deleting a custom Palette, against a real datab
       deviceModel: { name: 'og_bwr' },
       palette: { id: 'study-panel' },
     } as Device)
-    const screen = await database.getRepository(Screen).save({ type: 'file', filename: 'Photo', order: 1, isActive: true, fetchManual: false, generatedAt: new Date('2026-10-01T09:30:00.000Z'), fileUploadedAt: new Date('2026-09-15T08:00:00.000Z'), device })
+    const screen = await database.getRepository(Screen).save({ type: 'file', filename: 'Photo', order: 1, fetchManual: false, fileUploadedAt: new Date('2026-09-15T08:00:00.000Z'), device })
+    await database.getRepository(DeviceScreen).save({ device, screen, isActive: true, generatedAt: new Date('2026-10-01T09:30:00.000Z') })
     devicesWithImages.push(device.id)
     await writeStandInFile(resolveAppPath('public', 'screens', 'devices', device.id, `${screen.id}.png`))
     return { device, screen }

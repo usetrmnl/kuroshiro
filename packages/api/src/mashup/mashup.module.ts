@@ -6,6 +6,7 @@ import { DeviceSensorsModule } from '../device-sensors/device-sensors.module.js'
 import { Device } from '../devices/devices.entity.js'
 import { Plugin } from '../plugins/entities/plugin.entity.js'
 import { PluginsModule } from '../plugins/plugins.module.js'
+import { DeviceScreen } from '../screens/device-screen.entity.js'
 import { Screen } from '../screens/screens.entity.js'
 import { ScreensModule } from '../screens/screens.module.js'
 import { MashupConfiguration } from './entities/mashup-configuration.entity.js'
@@ -19,6 +20,7 @@ import { ScreenRenderService } from './services/screen-render.service.js'
   imports: [
     TypeOrmModule.forFeature([
       Screen,
+      DeviceScreen,
       Device,
       MashupConfiguration,
       MashupSlot,

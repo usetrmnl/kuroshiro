@@ -1,4 +1,5 @@
 import type { CurrentScreen, DeviceDetail, DeviceSummary, FallbackKind, FallbackReason, SensorReading, SleepState, SpecialFunction } from 'kuroshiro-shared'
+import type { DeviceScreen } from '../screens/device-screen.entity.js'
 import type { Screen } from '../screens/screens.entity.js'
 import type { Device } from './devices.entity.js'
 import { batteryPercentFromVoltage, SPECIAL_FUNCTIONS } from 'kuroshiro-shared'
@@ -19,7 +20,7 @@ const WELCOME_IMAGE_PATH = `/screens/welcome.png?v=${FALLBACK_SCREEN_TEMPLATE_VE
 export interface DeviceSummaryFacts {
   now: Date
   /** The Screen the last-served record names, when it still exists. */
-  servedScreen: Pick<Screen, 'id' | 'type' | 'filename' | 'generatedAt' | 'plugin'> | null
+  servedScreen: (Pick<Screen, 'id' | 'type' | 'filename' | 'plugin'> & Pick<DeviceScreen, 'generatedAt'>) | null
 }
 
 export interface DeviceDetailFacts extends DeviceSummaryFacts {

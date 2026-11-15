@@ -21,6 +21,7 @@ import { MashupConfiguration } from '../../mashup/entities/mashup-configuration.
 import { MashupSlot } from '../../mashup/entities/mashup-slot.entity.js'
 import { MashupRendererService } from '../../mashup/services/mashup-renderer.service.js'
 import { ScreenRenderService } from '../../mashup/services/screen-render.service.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { stubFetch } from '../../test/fetch.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
@@ -98,7 +99,7 @@ describe('what a Plugin renders from, and with which Template, against a real da
     primeMockDeviceModelsServiceWithAssignedModels(deviceModels)
     primeMockFallbackScreensService(fallbackScreens)
     deviceSensors = new DeviceSensorsService(database.getRepository(DeviceSensor))
-    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(deviceModels), deviceSensors)
+    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), database.getRepository(DeviceScreen), asService<DeviceModelsService>(deviceModels), deviceSensors)
     const refresh = new PluginRefreshService(renderCache, templateContext, new DataSourceFetchOutcomeService(database.getRepository(PluginDataSource)), new PluginDataSourceStateService(database.getRepository(PluginDataSource)), database.getRepository(Plugin))
     scheduler = new PluginSchedulerService(refresh)
     assignments = new PluginAssignmentsService(database.getRepository(Plugin), database.getRepository(Device), database.getRepository(DevicePlugin))
@@ -118,6 +119,7 @@ describe('what a Plugin renders from, and with which Template, against a real da
     mashupRenderer = new MashupRendererService(renderer, deviceSensors, templateContext, asService<DeviceModelsService>(deviceModels))
     const screenRender = new ScreenRenderService(
       database.getRepository(Screen),
+      database.getRepository(DeviceScreen),
       config,
       asService<DeviceModelsService>(deviceModels),
       mashupRenderer,
@@ -127,6 +129,7 @@ describe('what a Plugin renders from, and with which Template, against a real da
     display = new DeviceDisplayService(
       database.getRepository(Device),
       database.getRepository(Screen),
+      database.getRepository(DeviceScreen),
       config,
       asService<DeviceModelsService>(deviceModels),
       asService<FallbackScreensService>(fallbackScreens),
@@ -144,7 +147,7 @@ describe('what a Plugin renders from, and with which Template, against a real da
         { provide: WebhookIngestService, useValue: webhookIngest },
         WebhookPluginGuard,
         { provide: PluginsService, useValue: plugins },
-        { provide: PluginReadsService, useValue: new PluginReadsService(database.getRepository(Plugin), database.getRepository(Screen), database.getRepository(Alert), fieldValues, config) },
+        { provide: PluginReadsService, useValue: new PluginReadsService(database.getRepository(Plugin), database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Alert), fieldValues, config) },
         { provide: PluginPreviewDataService, useValue: new PluginPreviewDataService(database.getRepository(Plugin), database.getRepository(Device), deviceSensors, templateContext, asService<DeviceModelsService>(deviceModels)) },
         { provide: PluginAssignmentsService, useValue: assignments },
         { provide: PluginImporterService, useValue: asService<PluginImporterService>({}) },
@@ -179,7 +182,8 @@ describe('what a Plugin renders from, and with which Template, against a real da
   }
 
   async function addMashup(device: Device, pluginId: string, slotSizes: string[]): Promise<MashupConfiguration> {
-    const screen = await database.getRepository(Screen).save({ type: 'mashup', filename: 'Morning', order: 99, isActive: false, fetchManual: false, generatedAt: new Date(), device })
+    const screen = await database.getRepository(Screen).save({ type: 'mashup', filename: 'Morning', order: 99, fetchManual: false, device })
+    await database.getRepository(DeviceScreen).save({ device, screen, isActive: false, generatedAt: new Date() })
     const configuration = await database.getRepository(MashupConfiguration).save({ layout: '2x2', screen })
     await database.getRepository(MashupSlot).save(slotSizes.map((size, order) => ({ position: `slot-${order}`, size, order, plugin: { id: pluginId }, mashupConfiguration: configuration })))
     return database.getRepository(MashupConfiguration).findOneOrFail({
@@ -212,13 +216,13 @@ describe('what a Plugin renders from, and with which Template, against a real da
   }
 
   async function cachedOutput(pluginId: string): Promise<string | null | undefined> {
-    const screen = await database.getRepository(Screen).findOneOrFail({ where: { plugin: { id: pluginId } } })
-    return screen.cachedPluginOutput
+    const record = await database.getRepository(DeviceScreen).findOneOrFail({ where: { screen: { plugin: { id: pluginId } } } })
+    return record.cachedPluginOutput
   }
 
   async function cachedOutputsByDevice(pluginId: string): Promise<Record<string, string | null | undefined>> {
-    const screens = await database.getRepository(Screen).find({ where: { plugin: { id: pluginId } }, relations: { device: true } })
-    return Object.fromEntries(screens.map(screen => [screen.device.id, screen.cachedPluginOutput]))
+    const records = await database.getRepository(DeviceScreen).find({ where: { screen: { plugin: { id: pluginId } } }, relations: { device: true } })
+    return Object.fromEntries(records.map(record => [record.device.id, record.cachedPluginOutput]))
   }
 
   async function read(pluginId: string): Promise<PluginDetail> {

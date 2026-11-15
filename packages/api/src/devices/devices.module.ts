@@ -7,6 +7,7 @@ import { FirmwareModule } from '../firmware/firmware.module.js'
 import { LogEntry } from '../logs/logs.entity.js'
 import { MashupModule } from '../mashup/mashup.module.js'
 import { PluginsModule } from '../plugins/plugins.module.js'
+import { DeviceScreen } from '../screens/device-screen.entity.js'
 import { Screen } from '../screens/screens.entity.js'
 import { ScreensModule } from '../screens/screens.module.js'
 import { DeviceReadsService } from './device-reads.service.js'
@@ -20,7 +21,7 @@ import { SetupController } from './setup.controller.js'
 import { DeviceSetupService } from './setup.service.js'
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Device, Screen, LogEntry]), ConfigModule, PluginsModule, DeviceModelsModule, DeviceSensorsModule, FirmwareModule, ScreensModule, MashupModule, DeviceSleepImageModule],
+  imports: [TypeOrmModule.forFeature([Device, Screen, DeviceScreen, LogEntry]), ConfigModule, PluginsModule, DeviceModelsModule, DeviceSensorsModule, FirmwareModule, ScreensModule, MashupModule, DeviceSleepImageModule],
   controllers: [DevicesController, DisplayController, SetupController],
   providers: [DevicesService, DeviceReadsService, DeviceDisplayService, DeviceSetupService],
   exports: [DevicesService],

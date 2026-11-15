@@ -8,10 +8,11 @@ import { TRMNL_FRAMEWORK_VERSION, wrapInScreenShell } from 'kuroshiro-shared'
 import { Repository } from 'typeorm'
 import { DeviceModelsService } from '../../device-models/device-models.service.js'
 import { readHtmlRenderSignal, renderHtmlToPng } from '../../device-models/render-html-to-png.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { RENDER_FAILED, RENDER_HELD, RENDER_SKIPPED } from '../../screens/render-outcome.js'
+import { screenImagePath, screenImageUrl } from '../../screens/screen-image-paths.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { getErrorMessage } from '../../utils/getErrorMessage.js'
-import { resolveAppPath } from '../../utils/pathHelper.js'
 import { MashupConfiguration } from '../entities/mashup-configuration.entity.js'
 import { MashupSlot } from '../entities/mashup-slot.entity.js'
 import { mashupDither } from '../mashup-dither.js'
@@ -32,6 +33,8 @@ export class ScreenRenderService {
   constructor(
     @InjectRepository(Screen)
     private readonly screenRepository: Repository<Screen>,
+    @InjectRepository(DeviceScreen)
+    private readonly deviceScreenRepository: Repository<DeviceScreen>,
     private readonly configService: ConfigService,
     private readonly deviceModels: DeviceModelsService,
     private readonly mashupRenderer: MashupRendererService,
@@ -48,7 +51,8 @@ export class ScreenRenderService {
    * slot that skips draws empty and one that holds draws the markup it last drew live,
    * and the Mashup itself skips or holds only when no slot draws live.
    */
-  async renderMashupScreen(screen: Screen, device: Device, honorRenderSignal: boolean): Promise<RenderOutcome> {
+  async renderMashupScreen(record: DeviceScreen, device: Device, honorRenderSignal: boolean): Promise<RenderOutcome> {
+    const { screen } = record
     try {
       const screenWithMashup = await this.screenRepository.findOne({
         where: { id: screen.id },
@@ -70,12 +74,12 @@ export class ScreenRenderService {
         return null
 
       let renderedHtml: string
-      if (screenWithMashup.cachedPluginOutput) {
+      if (record.cachedPluginOutput) {
         this.logger.log(`Using cached mashup output for screen ${screen.id}`)
-        renderedHtml = screenWithMashup.cachedPluginOutput
+        renderedHtml = record.cachedPluginOutput
       }
       else {
-        renderedHtml = await this.renderMashupOnDemand(screen, mashup, device)
+        renderedHtml = await this.renderMashupOnDemand(record, mashup, device)
       }
 
       return await this.drawMashup(renderedHtml, mashup, screen, device, honorRenderSignal)
@@ -145,12 +149,12 @@ export class ScreenRenderService {
    */
   async renderBodyToScreenPng(bodyHtml: string, screen: Screen, device: Device, honorRenderSignal: boolean, frameworkVersion: string = TRMNL_FRAMEWORK_VERSION, dither = true, modifiers: ScreenModifiers = {}): Promise<string | typeof RENDER_SKIPPED | typeof RENDER_HELD> {
     const target = await this.deviceModels.renderTargetFor(device)
-    const renderSignal = await renderHtmlToPng(wrapInScreenShell(target, bodyHtml, frameworkVersion, modifiers), target, this.screenImagePath(device, screen), this.logger, { dither }, { honorRenderSignal })
+    const renderSignal = await renderHtmlToPng(wrapInScreenShell(target, bodyHtml, frameworkVersion, modifiers), target, screenImagePath(device.id, screen.id), this.logger, { dither }, { honorRenderSignal })
     if (honorRenderSignal && renderSignal === 'skip')
       return RENDER_SKIPPED
     if (honorRenderSignal && renderSignal === 'hold')
       return RENDER_HELD
-    return this.screenImageUrl(device, screen)
+    return screenImageUrl(this.configService.get<string>('api_url')!, device.id, screen.id)
   }
 
   /**
@@ -161,10 +165,10 @@ export class ScreenRenderService {
    */
   async renderAfterSave(screenId: string): Promise<void> {
     try {
-      const screen = await this.screenRepository.findOne({ where: { id: screenId }, relations: { device: true } })
-      if (!screen)
+      const record = await this.deviceScreenRepository.findOne({ where: { screen: { id: screenId } }, relations: { device: true, screen: true } })
+      if (!record)
         return
-      const outcome = await this.renderMashupScreen(screen, screen.device, false)
+      const outcome = await this.renderMashupScreen(record, record.device, false)
       if (outcome === RENDER_FAILED)
         this.logger.error(`Mashup screen ${screenId} could not be rendered after save`)
     }
@@ -173,8 +177,8 @@ export class ScreenRenderService {
     }
   }
 
-  private async renderMashupOnDemand(screen: Screen, mashup: MashupConfiguration, device: Device): Promise<string> {
-    this.logger.log(`Rendering mashup ${mashup.id} for screen ${screen.id}`)
+  private async renderMashupOnDemand(record: DeviceScreen, mashup: MashupConfiguration, device: Device): Promise<string> {
+    this.logger.log(`Rendering mashup ${mashup.id} for screen ${record.screen.id}`)
     const { html, slots } = await this.mashupRenderer.renderMashup(mashup, device)
     for (const { slot, markup } of slots) {
       slot.renderedMarkup = markup
@@ -183,23 +187,16 @@ export class ScreenRenderService {
     }
     mashup.slotSignalsRead = false
     await this.mashupRepository.update({ id: mashup.id }, { slotSignalsRead: false })
-    await this.cachePluginOutput(screen, html)
+    await this.cachePluginOutput(record, html)
     return html
   }
 
   /** Shared with `DeviceDisplayService`'s Plugin/HTML branches: the same cache-then-render-body shape, just reached from a different outcome. */
-  async cachePluginOutput(screen: Screen, renderedHtml: string): Promise<void> {
+  async cachePluginOutput(record: DeviceScreen, renderedHtml: string): Promise<void> {
     const generatedAt = new Date()
-    await this.screenRepository.update({ id: screen.id }, { cachedPluginOutput: renderedHtml, renderSignal: null, generatedAt })
-    screen.generatedAt = generatedAt
-    screen.renderSignal = null
-  }
-
-  private screenImagePath(device: Device, screen: Screen): string {
-    return resolveAppPath('public', 'screens', 'devices', device.id, `${screen.id}.png`)
-  }
-
-  private screenImageUrl(device: Device, screen: Screen): string {
-    return `${this.configService.get<string>('api_url')}/screens/devices/${device.id}/${screen.id}.png`
+    await this.deviceScreenRepository.update({ id: record.id }, { cachedPluginOutput: renderedHtml, renderSignal: null, generatedAt })
+    record.cachedPluginOutput = renderedHtml
+    record.generatedAt = generatedAt
+    record.renderSignal = null
   }
 }

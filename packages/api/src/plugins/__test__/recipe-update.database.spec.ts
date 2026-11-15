@@ -11,6 +11,7 @@ import { Alert } from '../../alerts/entities/alert.entity.js'
 import { createNoSensorsService } from '../../device-sensors/__test__/mockDeviceSensorsService.js'
 import { Device } from '../../devices/devices.entity.js'
 import { InstanceTimeZone } from '../../instance/instance-time-zone.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { stubFetch } from '../../test/fetch.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
@@ -98,7 +99,7 @@ describe('the Recipe Update Check, against a real database', () => {
     const fieldValues = new PluginFieldValuesService(database.getRepository(PluginFieldValue), database.getRepository(PluginField))
     const config = asService<ConfigService>({ get: () => false, getOrThrow: () => API_URL })
     const resolver = new PluginDataResolverService(new PluginDataFetcherService(renderer, config, new InstanceTimeZone()), new PluginTransformService())
-    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
+    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), database.getRepository(DeviceScreen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
     const refresh = new PluginRefreshService(renderCache, new PluginTemplateContextService(fieldValues, resolver, new InstanceTimeZone(), new PluginDataSourceStateService(database.getRepository(PluginDataSource))), new DataSourceFetchOutcomeService(database.getRepository(PluginDataSource)), new PluginDataSourceStateService(database.getRepository(PluginDataSource)), database.getRepository(Plugin))
     scheduler = new PluginSchedulerService(refresh)
     assignments = new PluginAssignmentsService(database.getRepository(Plugin), database.getRepository(Device), database.getRepository(DevicePlugin))
@@ -119,7 +120,7 @@ describe('the Recipe Update Check, against a real database', () => {
       controllers: [PluginsController],
       providers: [
         { provide: PluginsService, useValue: plugins },
-        { provide: PluginReadsService, useValue: new PluginReadsService(database.getRepository(Plugin), database.getRepository(Screen), database.getRepository(Alert), fieldValues, config) },
+        { provide: PluginReadsService, useValue: new PluginReadsService(database.getRepository(Plugin), database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Alert), fieldValues, config) },
         { provide: PluginPreviewDataService, useValue: asService<PluginPreviewDataService>({}) },
         { provide: PluginAssignmentsService, useValue: assignments },
         { provide: PluginImporterService, useValue: importer },

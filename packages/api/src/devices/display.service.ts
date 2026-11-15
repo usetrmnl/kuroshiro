@@ -1,7 +1,6 @@
 import type { RenderSignal } from 'kuroshiro-shared'
 import type { FallbackScreenRequest } from '../device-models/fallback-screen-templates.js'
 import type { Plugin } from '../plugins/entities/plugin.entity.js'
-import type { RotationScreen } from '../schedule/rotation.js'
 import type { RenderOutcome } from '../screens/render-outcome.js'
 import type { Requester } from '../utils/ssrfGuard.js'
 import type { DeviceCredentialsHeadersDto } from './dto/device-credentials-headers.dto.js'
@@ -24,8 +23,10 @@ import { PluginRendererService } from '../plugins/services/plugin-renderer.servi
 import { PluginTemplateContextService } from '../plugins/services/plugin-template-context.service.js'
 import { withTrmnlDevice } from '../plugins/trmnl-device.js'
 import { nextEligibleScreen } from '../schedule/rotation.js'
+import { DeviceScreen } from '../screens/device-screen.entity.js'
 import { RENDER_FAILED, RENDER_HELD, RENDER_SKIPPED } from '../screens/render-outcome.js'
-import { gatingRenderSignalOf } from '../screens/screen-states.js'
+import { screenImagePath, screenImageUrl } from '../screens/screen-image-paths.js'
+import { gatingRenderSignalOf, rotationScreensOf } from '../screens/screen-states.js'
 import { Screen } from '../screens/screens.entity.js'
 import { fileExists } from '../utils/fileExists.js'
 import { fileModifiedAt } from '../utils/fileModifiedAt.js'
@@ -166,6 +167,8 @@ export class DeviceDisplayService {
     private deviceRepository: Repository<Device>,
     @InjectRepository(Screen)
     private screenRepository: Repository<Screen>,
+    @InjectRepository(DeviceScreen)
+    private deviceScreenRepository: Repository<DeviceScreen>,
     private configService: ConfigService,
     private deviceModels: DeviceModelsService,
     private fallbackScreens: FallbackScreensService,
@@ -294,17 +297,17 @@ export class DeviceDisplayService {
       return this.buildSleepResponse(device, now, report)
     }
     this.logger.log(`Device ${device.id} is not mirrored. Cycling screens.`)
-    const screens = await this.screenRepository.find({
+    const records = await this.deviceScreenRepository.find({
       where: { device: { id: device.id } },
-      relations: { schedule: true },
-      order: { order: 'ASC' },
+      relations: { screen: { schedule: true } },
+      order: { screen: { order: 'ASC' } },
     })
 
-    const shown = await this.pickAndRenderScreen(screens, device, now)
+    const shown = await this.pickAndRenderScreen(records, device, now)
     if (!shown) {
       this.logger.log(`No eligible screen for device ${device.id} returning default no screen image`)
       const imageUrl = await this.fallbackImageUrl({ kind: 'noScreen' }, device)
-      await this.moveOnFrom(device, screens)
+      await this.moveOnFrom(device, records)
       return {
         display: new Display({
           action: report.specialFunction,
@@ -317,18 +320,18 @@ export class DeviceDisplayService {
           temperature_profile: 'default',
           update_firmware: report.updateFirmware,
         }),
-        served: servedNoScreen(screens.length),
+        served: servedNoScreen(records.length),
       }
     }
-    const { screen: nextScreen, imgUrl, served, filename, renderSignal } = shown
-    await this.moveOnFrom(device, screens)
-    nextScreen.isActive = true
-    nextScreen.renderSignal = renderSignal
-    // A partial update, not `.save()`: rendering may just have written this Screen's
+    const { record: nextRecord, imgUrl, served, filename, renderSignal } = shown
+    await this.moveOnFrom(device, records)
+    nextRecord.isActive = true
+    nextRecord.renderSignal = renderSignal
+    // A partial update, not `.save()`: rendering may just have written this record's
     // cached output or generatedAt, and `.save()` would overwrite them with this
     // in-memory copy's stale values from before the render ran.
-    await this.screenRepository.update({ id: nextScreen.id }, { isActive: true, renderSignal })
-    this.logger.log(`Returning screen ${nextScreen.id} for device ${device.id}`)
+    await this.deviceScreenRepository.update({ id: nextRecord.id }, { isActive: true, renderSignal })
+    this.logger.log(`Returning screen ${nextRecord.screen.id} for device ${device.id}`)
 
     return {
       display: new Display({
@@ -351,9 +354,9 @@ export class DeviceDisplayService {
    * exists, before the Screen it shows (if any) is made the Active Screen: a
    * poll whose answer cannot be made leaves Rotation where it stood.
    */
-  private async moveOnFrom(device: Device, screens: Screen[]): Promise<void> {
-    if (screens.length > 0)
-      await this.screenRepository.update({ device: { id: device.id } }, { isActive: false })
+  private async moveOnFrom(device: Device, records: DeviceScreen[]): Promise<void> {
+    if (records.length > 0)
+      await this.deviceScreenRepository.update({ device: { id: device.id } }, { isActive: false })
     await this.clearPick(device)
   }
 
@@ -387,52 +390,47 @@ export class DeviceDisplayService {
    * the one after it; it falls to the next eligible Screen only when the
    * Active Screen is passed over, now or after a fresh `skip` (ADR-0046).
    */
-  private async pickAndRenderScreen(screens: Screen[], device: Device, now: Date): Promise<{ screen: Screen, imgUrl: string, served: Served, filename: string, renderSignal: RenderSignal | null } | null> {
-    const byId = new Map(screens.map(screen => [screen.id, screen]))
-    const rotationScreens: RotationScreen[] = screens.map(screen => ({
-      id: screen.id,
-      isActive: screen.isActive,
-      schedule: screen.schedule,
-      renderSignal: gatingRenderSignalOf(screen),
-    }))
+  private async pickAndRenderScreen(records: DeviceScreen[], device: Device, now: Date): Promise<{ record: DeviceScreen, imgUrl: string, served: Served, filename: string, renderSignal: RenderSignal | null } | null> {
+    const byScreenId = new Map(records.map(record => [record.screen.id, record]))
+    const rotationScreens = rotationScreensOf(records)
     const pickedScreenId = device.pickedScreen?.id ?? null
     // Manual Rotation: only a press (or a pick) moves the page on; a timer poll re-renders the Active Screen where it is.
     const stayOnActive = device.rotationMode === 'manual' && !isButtonWake(device.lastWakeSource)
 
-    for (let attempt = 0; attempt < screens.length; attempt++) {
+    for (let attempt = 0; attempt < records.length; attempt++) {
       const candidate = nextEligibleScreen(rotationScreens, now, pickedScreenId, stayOnActive)
       if (!candidate)
         return null
-      const screen = byId.get(candidate.id)!
+      const record = byScreenId.get(candidate.id)!
 
-      if (gatingRenderSignalOf(screen) === 'hold')
-        return await this.holdScreen(screen, device)
+      if (gatingRenderSignalOf(record) === 'hold')
+        return await this.holdScreen(record, device)
 
-      const outcome = await this.generateScreenImage(screen, device, true)
+      const outcome = await this.generateScreenImage(record, device, true)
       if (outcome === RENDER_HELD) {
-        await this.screenRepository.update({ id: screen.id }, { renderSignal: 'hold' })
-        screen.renderSignal = 'hold'
-        return await this.holdScreen(screen, device)
+        await this.deviceScreenRepository.update({ id: record.id }, { renderSignal: 'hold' })
+        record.renderSignal = 'hold'
+        return await this.holdScreen(record, device)
       }
       if (outcome !== RENDER_SKIPPED) {
         return {
-          screen,
+          record,
           renderSignal: null,
           imgUrl: outcome.imgUrl,
           served: outcome.served,
-          filename: `${screen.filename}_${screen.generatedAt.toISOString()}`,
+          filename: `${record.screen.filename}_${record.generatedAt.toISOString()}`,
         }
       }
 
-      await this.screenRepository.update({ id: screen.id }, { renderSignal: 'skip' })
+      await this.deviceScreenRepository.update({ id: record.id }, { renderSignal: 'skip' })
       candidate.renderSignal = 'skip'
     }
     return null
   }
 
   /** A `hold` Screen is never a reason to retry the next one: it keeps its turn either way. */
-  private async holdScreen(screen: Screen, device: Device): Promise<{ screen: Screen, renderSignal: RenderSignal | null, imgUrl: string, served: Served, filename: string }> {
-    return { screen, renderSignal: 'hold', ...await this.heldScreenImage(screen, device) }
+  private async holdScreen(record: DeviceScreen, device: Device): Promise<{ record: DeviceScreen, renderSignal: RenderSignal | null, imgUrl: string, served: Served, filename: string }> {
+    return { record, renderSignal: 'hold', ...await this.heldScreenImage(record.screen, device) }
   }
 
   /**
@@ -443,10 +441,10 @@ export class DeviceDisplayService {
    * `noScreen` fallback for a Screen that has never produced one yet.
    */
   private async heldScreenImage(screen: Screen, device: Device): Promise<{ imgUrl: string, served: Served, filename: string }> {
-    const imagePath = this.screenImagePath(device, screen)
+    const imagePath = screenImagePath(device.id, screen.id)
     if (await fileExists(imagePath)) {
       const writtenAt = await fileModifiedAt(imagePath)
-      return { imgUrl: this.screenImageUrl(device, screen), served: servedScreen(screen.id), filename: `${screen.filename}_${writtenAt.toISOString()}` }
+      return { imgUrl: screenImageUrl(this.configService.get<string>('api_url')!, device.id, screen.id), served: servedScreen(screen.id), filename: `${screen.filename}_${writtenAt.toISOString()}` }
     }
     return { imgUrl: await this.fallbackImageUrl({ kind: 'noScreen' }, device), served: servedFallback('noScreen', 'noneEligible', screen.id), filename: 'noScreen.png' }
   }
@@ -594,20 +592,21 @@ export class DeviceDisplayService {
    * the plain no-screen fallback for a Device that never had one.
    */
   private async resolveFrozenImage(device: Device): Promise<ScreenImage & { filename: string }> {
-    const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
-    if (!activeScreen) {
-      const screenCount = await this.screenRepository.count({ where: { device: { id: device.id } } })
+    const activeRecord = await this.activeRecordOf(device)
+    if (!activeRecord) {
+      const screenCount = await this.deviceScreenRepository.count({ where: { device: { id: device.id } } })
       return {
         filename: 'noScreen.png',
         imgUrl: await this.fallbackImageUrl({ kind: 'noScreen' }, device),
         served: servedNoScreen(screenCount),
       }
     }
-    const { imgUrl, served } = await fileExists(this.screenImagePath(device, activeScreen))
-      ? { imgUrl: this.screenImageUrl(device, activeScreen), served: servedScreen(activeScreen.id) }
-      : this.assertRendered(await this.generateScreenImage(activeScreen, device, false))
+    const activeScreen = activeRecord.screen
+    const { imgUrl, served } = await fileExists(screenImagePath(device.id, activeScreen.id))
+      ? { imgUrl: screenImageUrl(this.configService.get<string>('api_url')!, device.id, activeScreen.id), served: servedScreen(activeScreen.id) }
+      : this.assertRendered(await this.generateScreenImage(activeRecord, device, false))
     return {
-      filename: `${activeScreen.filename}_${activeScreen.generatedAt.toISOString()}`,
+      filename: `${activeScreen.filename}_${activeRecord.generatedAt.toISOString()}`,
       imgUrl,
       served: served.kind === 'screen' ? servedScreen(activeScreen.id, 'asleep') : served,
     }
@@ -640,8 +639,8 @@ export class DeviceDisplayService {
       })
     }
 
-    const activeScreen = await this.screenRepository.findOneBy({ device: { id: device.id }, isActive: true })
-    if (!activeScreen && !device.mirrorEnabled) {
+    const activeRecord = await this.activeRecordOf(device)
+    if (!activeRecord && !device.mirrorEnabled) {
       this.logger.log('No screen found returning default no screen image')
       return new DisplayScreen({
         filename: 'noScreen.png',
@@ -652,7 +651,7 @@ export class DeviceDisplayService {
     }
     const { filename, imgUrl, renderedAt } = device.mirrorEnabled
       ? await this.resolveMirrorScreen(device)
-      : await this.resolveActiveScreenImage(device, activeScreen)
+      : await this.resolveActiveScreenImage(device, activeRecord)
     return new DisplayScreen({
       filename,
       image_url: imgUrl,
@@ -683,19 +682,25 @@ export class DeviceDisplayService {
     return { filename, imgUrl, renderedAt: undefined }
   }
 
-  private async resolveActiveScreenImage(device: Device, activeScreen: Screen | null): Promise<{ filename: string, imgUrl: string, renderedAt: Date }> {
-    if (!activeScreen)
+  /** The Device's record of its Active Screen, with the Screen. */
+  private activeRecordOf(device: Device): Promise<DeviceScreen | null> {
+    return this.deviceScreenRepository.findOne({ where: { device: { id: device.id }, isActive: true }, relations: { screen: true } })
+  }
+
+  private async resolveActiveScreenImage(device: Device, activeRecord: DeviceScreen | null): Promise<{ filename: string, imgUrl: string, renderedAt: Date }> {
+    if (!activeRecord)
       throw new NotFoundException('No active screen found for device')
+    const activeScreen = activeRecord.screen
     this.logger.log(`Returning screen ${activeScreen.id} for device ${device.id}`)
     let imgUrl: string
-    if (await fileExists(this.screenImagePath(device, activeScreen))) {
-      imgUrl = this.screenImageUrl(device, activeScreen)
+    if (await fileExists(screenImagePath(device.id, activeScreen.id))) {
+      imgUrl = screenImageUrl(this.configService.get<string>('api_url')!, device.id, activeScreen.id)
     }
     else {
       this.logger.log(`Screen image for ${activeScreen.id} missing on disk, generating on demand`)
-      imgUrl = this.assertRendered(await this.generateScreenImage(activeScreen, device, false)).imgUrl
+      imgUrl = this.assertRendered(await this.generateScreenImage(activeRecord, device, false)).imgUrl
     }
-    return { filename: `${activeScreen.filename}_${activeScreen.generatedAt.toISOString()}`, imgUrl, renderedAt: activeScreen.generatedAt }
+    return { filename: `${activeScreen.filename}_${activeRecord.generatedAt.toISOString()}`, imgUrl, renderedAt: activeRecord.generatedAt }
   }
 
   private async fetchAndStoreMirrorImage(device: Device, proxyHeaders?: DisplayRequestHeadersDto): Promise<{ response: TrmnlScreenResponse, localImageUrl: string }> {
@@ -733,16 +738,17 @@ export class DeviceDisplayService {
    * `RENDER_SKIPPED`/`RENDER_HELD` when `honorRenderSignal` is honouring a
    * live `skip`/`hold`.
    */
-  private async generateScreenImage(screen: Screen, device: Device, honorRenderSignal: boolean): Promise<ScreenImage | typeof RENDER_SKIPPED | typeof RENDER_HELD> {
+  private async generateScreenImage(record: DeviceScreen, device: Device, honorRenderSignal: boolean): Promise<ScreenImage | typeof RENDER_SKIPPED | typeof RENDER_HELD> {
+    const { screen } = record
     let outcome = screen.type === 'mashup'
-      ? await this.screenRender.renderMashupScreen(screen, device, honorRenderSignal)
-      : await this.renderPluginOrHtmlScreen(screen, device, honorRenderSignal)
+      ? await this.screenRender.renderMashupScreen(record, device, honorRenderSignal)
+      : await this.renderPluginOrHtmlScreen(record, device, honorRenderSignal)
 
     if (screen.externalLink && !screen.fetchManual)
-      outcome = await this.renderExternalLinkScreen(screen, device)
+      outcome = await this.renderExternalLinkScreen(record, device)
 
-    if (outcome === null && await fileExists(this.screenImagePath(device, screen)))
-      outcome = this.screenImageUrl(device, screen)
+    if (outcome === null && await fileExists(screenImagePath(device.id, screen.id)))
+      outcome = screenImageUrl(this.configService.get<string>('api_url')!, device.id, screen.id)
 
     if (outcome === RENDER_SKIPPED)
       return RENDER_SKIPPED
@@ -769,7 +775,8 @@ export class DeviceDisplayService {
     return withPlugin?.plugin?.name ?? screen.filename ?? null
   }
 
-  private async renderPluginOrHtmlScreen(screen: Screen, device: Device, honorRenderSignal: boolean): Promise<RenderOutcome> {
+  private async renderPluginOrHtmlScreen(record: DeviceScreen, device: Device, honorRenderSignal: boolean): Promise<RenderOutcome> {
+    const { screen } = record
     // Load plugin relationship if needed
     const screenWithPlugin = await this.screenRepository.findOne({
       where: { id: screen.id },
@@ -777,16 +784,16 @@ export class DeviceDisplayService {
     })
 
     if (screenWithPlugin?.plugin)
-      return await this.renderPluginScreen(screenWithPlugin, screen, device, honorRenderSignal)
+      return await this.renderPluginScreen(screenWithPlugin.plugin, record, device, honorRenderSignal)
 
     return screen.html
-      ? await this.renderHtmlScreen(screen.html, screen, device, honorRenderSignal)
+      ? await this.renderHtmlScreen(screen.html, record, device, honorRenderSignal)
       : null
   }
 
-  private async renderHtmlScreen(html: string, screen: Screen, device: Device, honorRenderSignal: boolean): Promise<RenderOutcome> {
+  private async renderHtmlScreen(html: string, record: DeviceScreen, device: Device, honorRenderSignal: boolean): Promise<RenderOutcome> {
     try {
-      return await this.screenRender.renderBodyToScreenPng(viewFull(html), screen, device, honorRenderSignal, undefined, screen.dither)
+      return await this.screenRender.renderBodyToScreenPng(viewFull(html), record.screen, device, honorRenderSignal, undefined, record.screen.dither)
     }
     catch (err) {
       this.logger.error(`Failed to render HTML screen: ${getErrorMessage(err)}`)
@@ -794,15 +801,15 @@ export class DeviceDisplayService {
     }
   }
 
-  private async renderPluginScreen(screenWithPlugin: Screen, screen: Screen, device: Device, honorRenderSignal: boolean): Promise<RenderOutcome> {
-    const plugin = screenWithPlugin.plugin!
+  private async renderPluginScreen(plugin: Plugin, record: DeviceScreen, device: Device, honorRenderSignal: boolean): Promise<RenderOutcome> {
+    const { screen } = record
     const frameworkVersion = effectiveFrameworkVersion(plugin.frameworkVersion)
 
     // Use cached output if available
-    if (screenWithPlugin.cachedPluginOutput) {
+    if (record.cachedPluginOutput) {
       try {
         this.logger.log(`Using cached plugin output for plugin ${plugin.id}, screen ${screen.id}`)
-        return await this.screenRender.renderBodyToScreenPng(viewFull(screenWithPlugin.cachedPluginOutput), screen, device, honorRenderSignal, frameworkVersion, plugin.dither, { noScreenPadding: plugin.noScreenPadding, darkMode: plugin.darkMode })
+        return await this.screenRender.renderBodyToScreenPng(viewFull(record.cachedPluginOutput), screen, device, honorRenderSignal, frameworkVersion, plugin.dither, { noScreenPadding: plugin.noScreenPadding, darkMode: plugin.darkMode })
       }
       catch (err) {
         const message = getErrorMessage(err)
@@ -813,7 +820,7 @@ export class DeviceDisplayService {
 
     // No render is cached yet: a Poll-kind Plugin fetches now, a Webhook-kind one renders what it has received, or nothing.
     try {
-      const renderedHtml = await this.renderPluginHtml(plugin, screen, device)
+      const renderedHtml = await this.renderPluginHtml(plugin, record, device)
       return renderedHtml ? await this.screenRender.renderBodyToScreenPng(viewFull(renderedHtml), screen, device, honorRenderSignal, frameworkVersion, plugin.dither, { noScreenPadding: plugin.noScreenPadding, darkMode: plugin.darkMode }) : null
     }
     catch (err) {
@@ -823,16 +830,17 @@ export class DeviceDisplayService {
     }
   }
 
-  private async renderExternalLinkScreen(screen: Screen, device: Device): Promise<string | typeof RENDER_FAILED> {
+  private async renderExternalLinkScreen(record: DeviceScreen, device: Device): Promise<string | typeof RENDER_FAILED> {
+    const { screen } = record
     const inputPath = path.join(resolveAppPath('public', 'screens', 'devices', device.id), 'tmp-source')
     try {
       await downloadImage(screen.externalLink!, inputPath, this.logger, this.imageRequester())
-      await convertToPng(inputPath, this.screenImagePath(device, screen), await this.deviceModels.renderTargetFor(device), this.logger, { dither: screen.dither })
+      await convertToPng(inputPath, screenImagePath(device.id, screen.id), await this.deviceModels.renderTargetFor(device), this.logger, { dither: screen.dither })
       this.logger.log('Updating generation date on screen')
-      screen.generatedAt = new Date()
-      await this.screenRepository.save(screen)
+      record.generatedAt = new Date()
+      await this.deviceScreenRepository.update({ id: record.id }, { generatedAt: record.generatedAt })
       this.logger.log('Download and conversion successful')
-      return this.screenImageUrl(device, screen)
+      return screenImageUrl(this.configService.get<string>('api_url')!, device.id, screen.id)
     }
     catch (err) {
       const message = getErrorMessage(err)
@@ -854,8 +862,8 @@ export class DeviceDisplayService {
    * Device as `trmnl.device`, with the Device's current Sensors as the tick lays them, so the output
    * cached here reads no differently from the one the next tick writes.
    */
-  private async renderPluginHtml(plugin: Plugin, screen: Screen, device: Device): Promise<string | null> {
-    this.logger.log(`No cache, rendering plugin ${plugin.id} on-demand for screen ${screen.id}`)
+  private async renderPluginHtml(plugin: Plugin, record: DeviceScreen, device: Device): Promise<string | null> {
+    this.logger.log(`No cache, rendering plugin ${plugin.id} on-demand for screen ${record.screen.id}`)
 
     const fullTemplate = templateOfSize(plugin.templates, 'full')
     if (!fullTemplate)
@@ -865,21 +873,13 @@ export class DeviceDisplayService {
     const { context } = await this.pluginTemplateContext.contextFor(plugin, sensors)
 
     const renderedHtml = await this.pluginRenderer.render(fullTemplate.liquidMarkup, await withTrmnlDevice(context, device, this.deviceModels))
-    await this.screenRender.cachePluginOutput(screen, renderedHtml)
+    await this.screenRender.cachePluginOutput(record, renderedHtml)
     return renderedHtml
   }
 
   /** How an image is fetched from an address a user or TRMNL gave: in demo mode refused for an internal host, on every redirect too. */
   private imageRequester(): Requester {
     return requesterFor(this.configService.get<boolean>('demo_mode'))
-  }
-
-  private screenImagePath(device: Device, screen: Screen): string {
-    return resolveAppPath('public', 'screens', 'devices', device.id, `${screen.id}.png`)
-  }
-
-  private screenImageUrl(device: Device, screen: Screen): string {
-    return `${this.configService.get<string>('api_url')}/screens/devices/${device.id}/${screen.id}.png`
   }
 
   private async wipeImageUrl(device: Device): Promise<string> {

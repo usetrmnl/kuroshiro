@@ -9,6 +9,7 @@ import path from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
 import { DeviceSensor } from '../../device-sensors/entities/device-sensor.entity.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
 import { createMockDeviceModelsService, primeMockDeviceModelsService } from '../../test/mockDeviceModelsService.js'
@@ -49,7 +50,7 @@ describe('a Device\'s own sleep image, against a real database', () => {
       controllers: [DeviceSleepImageController],
       providers: [
         { provide: DeviceSleepImageService, useValue: new DeviceSleepImageService(devices, asService<ConfigService>(config), asService<DeviceModelsService>(deviceModels)) },
-        { provide: DeviceReadsService, useValue: new DeviceReadsService(devices, database.getRepository(Screen), deviceSensors) },
+        { provide: DeviceReadsService, useValue: new DeviceReadsService(devices, database.getRepository(Screen), database.getRepository(DeviceScreen), deviceSensors) },
       ],
     })
   })

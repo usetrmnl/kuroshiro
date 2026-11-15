@@ -7,8 +7,8 @@ const POLLED_AT = new Date('2026-03-01T10:00:00.000Z')
 const NOW = new Date('2026-03-01T10:01:00.000Z')
 const RENDERED_AT = new Date('2026-03-01T09:30:00.000Z')
 
-const weather = makeScreen({ id: 'screen-weather', filename: 'Weather', generatedAt: RENDERED_AT })
-const weatherPlugin = makeScreen({ id: 'screen-weather-plugin', type: 'plugin', filename: null, plugin: makePlugin({ name: 'Weather' }), generatedAt: RENDERED_AT })
+const weather = { ...makeScreen({ id: 'screen-weather', filename: 'Weather' }), generatedAt: RENDERED_AT }
+const weatherPlugin = { ...makeScreen({ id: 'screen-weather-plugin', type: 'plugin', filename: null, plugin: makePlugin({ name: 'Weather' }) }), generatedAt: RENDERED_AT }
 
 function polledDevice(overrides: Partial<Device> = {}): Device {
   return makeDevice({

@@ -12,6 +12,7 @@ import { Palette } from '../../device-models/entities/palette.entity.js'
 import { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
 import { DeviceSensor } from '../../device-sensors/entities/device-sensor.entity.js'
 import { Firmware } from '../../firmware/entities/firmware.entity.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { BW, createMockDeviceModelsService, createMockFallbackScreensService, GRAY_4, OG_PLUS, primeMockDeviceModelsService, primeMockFallbackScreensService } from '../../test/mockDeviceModelsService.js'
 import { createPluginTemplateContextService } from '../../test/mockPluginCollaborators.js'
@@ -41,6 +42,7 @@ describe('what a /display poll writes to its Device, against a real database', (
     service = new DeviceDisplayService(
       database.getRepository(Device),
       database.getRepository(Screen),
+      database.getRepository(DeviceScreen),
       asService<ConfigService>({ get: () => 'http://api' }),
       asService<DeviceModelsService>(deviceModels),
       asService<FallbackScreensService>(fallbackScreens),

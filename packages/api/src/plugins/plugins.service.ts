@@ -13,6 +13,7 @@ import { isUUID } from 'class-validator'
 import { checkTemplate } from 'kuroshiro-shared'
 import { Repository } from 'typeorm'
 import { ApiException, ValidationException } from '../errors/api.exception.js'
+import { DeviceScreen } from '../screens/device-screen.entity.js'
 import { closeGapInOrder } from '../screens/screen-order.js'
 import { Screen } from '../screens/screens.entity.js'
 import generateApikey from '../utils/generateApikey.js'
@@ -540,7 +541,7 @@ export class PluginsService implements OnModuleInit {
   }
 
   async invalidateRenderCaches(pluginId: string): Promise<void> {
-    await this.screenRepository.update({ plugin: { id: pluginId } }, { cachedPluginOutput: null, renderSignal: null })
+    await this.screenRepository.manager.getRepository(DeviceScreen).createQueryBuilder().update().set({ cachedPluginOutput: null, renderSignal: null }).where(`"screenId" IN (SELECT "id" FROM "screen" WHERE "pluginId" = :pluginId)`, { pluginId }).execute()
     await this.renderCache.invalidateMashupCaches(pluginId)
   }
 

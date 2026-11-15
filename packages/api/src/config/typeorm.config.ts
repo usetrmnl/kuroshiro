@@ -16,6 +16,7 @@ import { PluginField } from '../plugins/entities/plugin-field.entity.js'
 import { PluginTemplate } from '../plugins/entities/plugin-template.entity.js'
 import { Plugin } from '../plugins/entities/plugin.entity.js'
 import { Schedule } from '../schedule/schedule.entity.js'
+import { DeviceScreen } from '../screens/device-screen.entity.js'
 import { Screen } from '../screens/screens.entity.js'
 import { InstanceSettings } from '../settings/entities/instance-settings.entity.js'
 import { ENV_VARS } from './env-vars.js'
@@ -27,7 +28,7 @@ const AppDataSource = new DataSource({
   username: process.env[ENV_VARS.dbUser] || 'root',
   password: process.env[ENV_VARS.dbPassword] || 'root',
   database: process.env[ENV_VARS.dbName] || 'test',
-  entities: [Device, DeviceModel, Palette, DeviceSensor, Screen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, MashupConfiguration, MashupSlot, Schedule, Firmware, Alert, InstanceSettings],
+  entities: [Device, DeviceModel, Palette, DeviceSensor, Screen, DeviceScreen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, MashupConfiguration, MashupSlot, Schedule, Firmware, Alert, InstanceSettings],
   migrations: ['dist/src/migrations/*.js'],
   migrationsTableName: 'migrations',
   synchronize: false,

@@ -1,6 +1,6 @@
 import type { PluginDetailFacts, PluginFacts } from '../plugin.mapper.js'
 import { describe, expect, it } from 'vitest'
-import { makeDevice, makePlugin, makePluginDataSource, makePluginField, makePluginTemplate, makeSchedule, makeScreen } from '../../test/fixtures.js'
+import { makeDevice, makeDeviceScreen, makePlugin, makePluginDataSource, makePluginField, makePluginTemplate, makeSchedule, makeScreen } from '../../test/fixtures.js'
 import { toPluginDetail, toPluginSummary, toPreviewData } from '../plugin.mapper.js'
 
 const CREATED_AT = new Date('2026-02-01T08:00:00.000Z')
@@ -323,14 +323,14 @@ describe('toPluginDetail', () => {
   })
 
   it('reads each Plugin Assignment with its place in the Device\'s Order and its Screen State', () => {
-    const onKitchen = makeScreen({ id: 'screen-k2', type: 'plugin', order: 2, isActive: false, device: kitchen })
-    const onHall = makeScreen({ id: 'screen-h1', type: 'plugin', order: 1, isActive: false, device: hall, schedule: makeSchedule({ enabled: false }) })
+    const onKitchen = makeScreen({ id: 'screen-k2', type: 'plugin', order: 2, device: kitchen })
+    const onHall = makeScreen({ id: 'screen-h1', type: 'plugin', order: 1, device: hall, schedule: makeSchedule({ enabled: false }) })
     const facts: PluginDetailFacts = {
       ...NOTHING_AROUND_IN_DETAIL,
       assignmentScreens: [onKitchen, onHall],
       screensByDevice: new Map([
-        ['device-kitchen', [makeScreen({ id: 'screen-k1', order: 1, isActive: true, device: kitchen }), onKitchen, makeScreen({ id: 'screen-k3', order: 3, isActive: false, device: kitchen })]],
-        ['device-hall', [onHall]],
+        ['device-kitchen', [makeDeviceScreen({ screen: makeScreen({ id: 'screen-k1', order: 1, device: kitchen }), isActive: true }), makeDeviceScreen({ screen: onKitchen }), makeDeviceScreen({ screen: makeScreen({ id: 'screen-k3', order: 3, device: kitchen }) })]],
+        ['device-hall', [makeDeviceScreen({ screen: onHall })]],
       ]),
     }
 
@@ -342,8 +342,8 @@ describe('toPluginDetail', () => {
 
   it('reads no Screen State for an assignment on a mirrored Device', () => {
     const mirrored = makeDevice({ id: 'device-mirror', name: 'Mirror', mirrorEnabled: true })
-    const screen = makeScreen({ id: 'screen-1', type: 'plugin', order: 1, isActive: true, device: mirrored })
-    const facts: PluginDetailFacts = { ...NOTHING_AROUND_IN_DETAIL, assignmentScreens: [screen], screensByDevice: new Map([['device-mirror', [screen]]]) }
+    const screen = makeScreen({ id: 'screen-1', type: 'plugin', order: 1, device: mirrored })
+    const facts: PluginDetailFacts = { ...NOTHING_AROUND_IN_DETAIL, assignmentScreens: [screen], screensByDevice: new Map([['device-mirror', [makeDeviceScreen({ screen, isActive: true })]]]) }
 
     expect(toPluginDetail(makePlugin(), facts).assignments).toEqual([
       { deviceId: 'device-mirror', deviceName: 'Mirror', screenId: 'screen-1', order: 1, screenCount: 1, state: null },

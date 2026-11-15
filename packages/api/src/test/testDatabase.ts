@@ -17,6 +17,7 @@ import { PluginField } from '../plugins/entities/plugin-field.entity.js'
 import { PluginTemplate } from '../plugins/entities/plugin-template.entity.js'
 import { Plugin } from '../plugins/entities/plugin.entity.js'
 import { Schedule } from '../schedule/schedule.entity.js'
+import { DeviceScreen } from '../screens/device-screen.entity.js'
 import { Screen } from '../screens/screens.entity.js'
 import { InstanceSettings } from '../settings/entities/instance-settings.entity.js'
 import { SyncRun } from '../sync-runs/entities/sync-run.entity.js'
@@ -30,7 +31,7 @@ export async function createTestDatabase(): Promise<DataSource> {
   const dataSource = new DataSource({
     type: 'postgres',
     driver: new PGliteDriver({ extensions: { uuid_ossp } }).driver,
-    entities: [Device, DeviceModel, Palette, DeviceSensor, Screen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, MashupConfiguration, MashupSlot, Schedule, Firmware, Alert, InstanceSettings, SyncRun],
+    entities: [Device, DeviceModel, Palette, DeviceSensor, Screen, DeviceScreen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, MashupConfiguration, MashupSlot, Schedule, Firmware, Alert, InstanceSettings, SyncRun],
     synchronize: true,
   })
   return dataSource.initialize()

@@ -1,11 +1,12 @@
 import type { DeviceModelsService } from '../../device-models/device-models.service.js'
 import type { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
 import type { MashupSlot } from '../../mashup/entities/mashup-slot.entity.js'
+import type { DeviceScreen } from '../../screens/device-screen.entity.js'
 import type { Screen } from '../../screens/screens.entity.js'
 import type { PluginRendererService } from '../services/plugin-renderer.service.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMockDeviceSensorsService, primeMockDeviceSensorsService } from '../../device-sensors/__test__/mockDeviceSensorsService.js'
-import { makeDevice, makeDeviceSensor, makeMashupConfiguration, makeMashupSlot, makePlugin, makePluginTemplate, makeScreen } from '../../test/fixtures.js'
+import { makeDevice, makeDeviceScreen, makeDeviceSensor, makeMashupConfiguration, makeMashupSlot, makePlugin, makePluginTemplate, makeScreen } from '../../test/fixtures.js'
 import { createMockDeviceModelsService, primeMockDeviceModelsServiceWithAssignedModels, V2 } from '../../test/mockDeviceModelsService.js'
 import { asRepository, createMockRepository } from '../../test/mockRepository.js'
 import { asService, injectPrivate } from '../../test/mockService.js'
@@ -15,6 +16,7 @@ describe('pluginRenderCacheService', () => {
   let service: PluginRenderCacheService
   let mockRenderer: { render: ReturnType<typeof vi.fn> }
   let sensors: ReturnType<typeof createMockDeviceSensorsService>
+  let mockRecordRepo: ReturnType<typeof createMockRepository<DeviceScreen>>
   let mockScreenRepo: ReturnType<typeof createMockRepository<Screen>> & { manager: { getRepository: ReturnType<typeof vi.fn> } }
   let mockMashupSlotRepo: ReturnType<typeof createMockRepository<MashupSlot>>
 
@@ -23,8 +25,8 @@ describe('pluginRenderCacheService', () => {
     templates: [makePluginTemplate({ layout: 'full', liquidMarkup: '{{ data }}' })],
   })
 
-  const kitchen = makeScreen({ id: 'screen-kitchen', device: makeDevice({ id: 'device-kitchen', friendlyId: 'KITCHEN' }) })
-  const hallway = makeScreen({ id: 'screen-hallway', device: makeDevice({ id: 'device-hallway', friendlyId: 'HALLWAY', deviceModel: V2 }) })
+  const kitchen = makeDeviceScreen({ id: 'record-kitchen', screen: makeScreen({ id: 'screen-kitchen', device: makeDevice({ id: 'device-kitchen', friendlyId: 'KITCHEN' }) }) })
+  const hallway = makeDeviceScreen({ id: 'record-hallway', screen: makeScreen({ id: 'screen-hallway', device: makeDevice({ id: 'device-hallway', friendlyId: 'HALLWAY', deviceModel: V2 }) }) })
 
   beforeEach(() => {
     mockRenderer = {
@@ -38,11 +40,12 @@ describe('pluginRenderCacheService', () => {
       manager: { getRepository: vi.fn(() => mockMashupSlotRepo) },
     })
 
-    mockScreenRepo.find.mockResolvedValue([kitchen, hallway])
+    mockRecordRepo = createMockRepository<DeviceScreen>()
+    mockRecordRepo.find.mockResolvedValue([kitchen, hallway])
 
     sensors = createMockDeviceSensorsService()
     primeMockDeviceSensorsService(sensors)
-    service = new PluginRenderCacheService(asService<PluginRendererService>(mockRenderer), asRepository(mockScreenRepo), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), asService<DeviceSensorsService>(sensors))
+    service = new PluginRenderCacheService(asService<PluginRendererService>(mockRenderer), asRepository(mockScreenRepo), asRepository(mockRecordRepo), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), asService<DeviceSensorsService>(sensors))
   })
 
   const deviceOfEachRender = () => mockRenderer.render.mock.calls.map(([, context]) => context.trmnl?.device)
@@ -57,8 +60,8 @@ describe('pluginRenderCacheService', () => {
       expect.objectContaining({ friendly_id: 'KITCHEN', model: 'og_plus', width: 800, height: 480 }),
       expect.objectContaining({ friendly_id: 'HALLWAY', model: 'v2', width: 1872, height: 1404 }),
     ])
-    expect(mockScreenRepo.update).toHaveBeenCalledWith('screen-kitchen', expect.objectContaining({ cachedPluginOutput: '<div>KITCHEN</div>', renderSignal: null }))
-    expect(mockScreenRepo.update).toHaveBeenCalledWith('screen-hallway', expect.objectContaining({ cachedPluginOutput: '<div>HALLWAY</div>', renderSignal: null }))
+    expect(mockRecordRepo.update).toHaveBeenCalledWith('record-kitchen', expect.objectContaining({ cachedPluginOutput: '<div>KITCHEN</div>', renderSignal: null }))
+    expect(mockRecordRepo.update).toHaveBeenCalledWith('record-hallway', expect.objectContaining({ cachedPluginOutput: '<div>HALLWAY</div>', renderSignal: null }))
   })
 
   it('lays each Screen\'s own Device\'s Sensors on its render, and none where the Plugin is on no Screen', async () => {
@@ -69,28 +72,28 @@ describe('pluginRenderCacheService', () => {
     expect(mockRenderer.render.mock.calls.map(([, context]) => context.sensors)).toEqual([{ temperature: { value: 21.5, unit: 'C' } }, {}])
 
     mockRenderer.render.mockClear()
-    mockScreenRepo.find.mockResolvedValue([])
+    mockRecordRepo.find.mockResolvedValue([])
     await service.renderAndCache(plugin, { data: 'hello', sensors: {} })
     expect(mockRenderer.render).toHaveBeenCalledExactlyOnceWith('{{ data }}', { data: 'hello', sensors: {} })
   })
 
   it('renders a Plugin on no Screen once, told no Device, and caches nothing', async () => {
-    mockScreenRepo.find.mockResolvedValue([])
+    mockRecordRepo.find.mockResolvedValue([])
 
     await service.renderAndCache(plugin, { data: 'hello' })
 
     expect(mockRenderer.render).toHaveBeenCalledExactlyOnceWith('{{ data }}', { data: 'hello' })
-    expect(mockScreenRepo.update).not.toHaveBeenCalled()
+    expect(mockRecordRepo.update).not.toHaveBeenCalled()
   })
 
   it('still invalidates the Mashups that show a Plugin on no Screen of its own', async () => {
-    mockScreenRepo.find.mockResolvedValue([])
+    mockRecordRepo.find.mockResolvedValue([])
     mockMashupSlotRepo.find.mockResolvedValue([makeMashupSlot({ mashupConfiguration: makeMashupConfiguration({ screen: makeScreen({ id: 'screen-mashup' }) }) })])
     injectPrivate(service, 'mashupSlotRepository', asRepository(mockMashupSlotRepo))
 
     await service.renderAndCache(plugin, { data: 'hello' })
 
-    expect(mockScreenRepo.update).toHaveBeenCalledExactlyOnceWith({ id: 'screen-mashup' }, { cachedPluginOutput: null, renderSignal: null })
+    expect(mockRecordRepo.update).toHaveBeenCalledExactlyOnceWith({ screen: { id: 'screen-mashup' } }, { cachedPluginOutput: null, renderSignal: null })
   })
 
   it('writes nothing when a newer render of the Plugin has started by the time every Screen is rendered', async () => {
@@ -105,7 +108,7 @@ describe('pluginRenderCacheService', () => {
     await service.renderAndCache(plugin, { data: 'hello' }, () => superseded)
 
     expect(mockRenderer.render).toHaveBeenCalledTimes(2)
-    expect(mockScreenRepo.update).not.toHaveBeenCalled()
+    expect(mockRecordRepo.update).not.toHaveBeenCalled()
   })
 
   it('leaves a Webhook Payload that is an array as the whole context, with no trmnl to tell the Device in', async () => {
@@ -127,14 +130,14 @@ describe('pluginRenderCacheService', () => {
     mockRenderer.render.mockResolvedValueOnce('<div>kitchen</div>').mockRejectedValue(Object.assign(new Error('undefined variable: city, line:3, col:1'), { token: { getPosition: () => [3, 1] } }))
 
     await expect(service.renderAndCache(plugin, {})).rejects.toMatchObject({ size: 'full', problem: { message: 'undefined variable: city', line: 3 } })
-    expect(mockScreenRepo.update).not.toHaveBeenCalled()
+    expect(mockRecordRepo.update).not.toHaveBeenCalled()
   })
 
   it('does nothing when the plugin has no template', async () => {
     await service.renderAndCache(makePlugin({ ...plugin, templates: [] }), {})
 
     expect(mockRenderer.render).not.toHaveBeenCalled()
-    expect(mockScreenRepo.update).not.toHaveBeenCalled()
+    expect(mockRecordRepo.update).not.toHaveBeenCalled()
   })
 
   it('invalidates mashup caches when plugin updates', async () => {
@@ -150,12 +153,12 @@ describe('pluginRenderCacheService', () => {
       where: { plugin: { id: 'plugin-1' } },
       relations: { mashupConfiguration: { screen: true } },
     })
-    expect(mockScreenRepo.update).toHaveBeenCalledWith(
-      { id: 'screen-1' },
+    expect(mockRecordRepo.update).toHaveBeenCalledWith(
+      { screen: { id: 'screen-1' } },
       { cachedPluginOutput: null, renderSignal: null },
     )
-    expect(mockScreenRepo.update).toHaveBeenCalledWith(
-      { id: 'screen-2' },
+    expect(mockRecordRepo.update).toHaveBeenCalledWith(
+      { screen: { id: 'screen-2' } },
       { cachedPluginOutput: null, renderSignal: null },
     )
   })
@@ -164,6 +167,6 @@ describe('pluginRenderCacheService', () => {
     injectPrivate(service, 'mashupSlotRepository', null)
 
     await expect(service.invalidateMashupCaches('plugin-1')).resolves.toBeUndefined()
-    expect(mockScreenRepo.update).not.toHaveBeenCalled()
+    expect(mockRecordRepo.update).not.toHaveBeenCalled()
   })
 })

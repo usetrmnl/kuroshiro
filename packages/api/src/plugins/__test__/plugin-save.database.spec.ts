@@ -10,6 +10,7 @@ import { Device } from '../../devices/devices.entity.js'
 import { InstanceTimeZone } from '../../instance/instance-time-zone.js'
 import { MashupConfiguration } from '../../mashup/entities/mashup-configuration.entity.js'
 import { MashupSlot } from '../../mashup/entities/mashup-slot.entity.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { stubFetch } from '../../test/fetch.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
@@ -72,7 +73,7 @@ describe('saving a Plugin, PATCH /api/plugins/:id, against a real database', () 
     const config = asService<ConfigService>({ get: () => false, getOrThrow: () => 'https://kuroshiro.example' })
     const resolver = new PluginDataResolverService(new PluginDataFetcherService(renderer, config, new InstanceTimeZone()), new PluginTransformService())
     const templateContext = new PluginTemplateContextService(fieldValues, resolver, new InstanceTimeZone(), new PluginDataSourceStateService(database.getRepository(PluginDataSource)))
-    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
+    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), database.getRepository(DeviceScreen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
     const refresh = new PluginRefreshService(renderCache, templateContext, new DataSourceFetchOutcomeService(database.getRepository(PluginDataSource)), new PluginDataSourceStateService(database.getRepository(PluginDataSource)), database.getRepository(Plugin))
     scheduler = new PluginSchedulerService(refresh)
     assignments = new PluginAssignmentsService(database.getRepository(Plugin), database.getRepository(Device), database.getRepository(DevicePlugin))
@@ -92,7 +93,7 @@ describe('saving a Plugin, PATCH /api/plugins/:id, against a real database', () 
       controllers: [PluginsController],
       providers: [
         { provide: PluginsService, useValue: plugins },
-        { provide: PluginReadsService, useValue: new PluginReadsService(database.getRepository(Plugin), database.getRepository(Screen), database.getRepository(Alert), fieldValues, config) },
+        { provide: PluginReadsService, useValue: new PluginReadsService(database.getRepository(Plugin), database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Alert), fieldValues, config) },
         { provide: PluginPreviewDataService, useValue: asService<PluginPreviewDataService>({}) },
         { provide: PluginAssignmentsService, useValue: assignments },
         { provide: PluginImporterService, useValue: asService<PluginImporterService>({}) },
@@ -560,11 +561,11 @@ describe('saving a Plugin, PATCH /api/plugins/:id, against a real database', () 
     it('clears the cached output of its Screens when Dithering flips, so the next poll redraws', async () => {
       const plugin = await createPollPlugin()
       const screenId = await assignments.assign(plugin.id, (await addDevice('Kitchen')).id)
-      await database.getRepository(Screen).update(screenId, { cachedPluginOutput: '<p>stale</p>' })
+      await database.getRepository(DeviceScreen).update({ screen: { id: screenId } }, { cachedPluginOutput: '<p>stale</p>' })
 
       await saved(plugin.id, { dither: false })
 
-      expect((await database.getRepository(Screen).findOneByOrFail({ id: screenId })).cachedPluginOutput).not.toBe('<p>stale</p>')
+      expect((await database.getRepository(DeviceScreen).findOneByOrFail({ screen: { id: screenId } })).cachedPluginOutput).not.toBe('<p>stale</p>')
     })
 
     it('refuses a refresh interval on a Webhook-kind Plugin, which has none', async () => {
@@ -623,8 +624,8 @@ describe('saving a Plugin, PATCH /api/plugins/:id, against a real database', () 
 
   describe('after the commit', () => {
     async function cachedOutput(pluginId: string): Promise<string | null | undefined> {
-      const screen = await database.getRepository(Screen).findOneOrFail({ where: { plugin: { id: pluginId } } })
-      return screen.cachedPluginOutput
+      const record = await database.getRepository(DeviceScreen).findOneOrFail({ where: { screen: { plugin: { id: pluginId } } } })
+      return record.cachedPluginOutput
     }
 
     it('answers while a slow Data Source is still being fetched, then renders for the Device in the background', async () => {
@@ -728,13 +729,15 @@ describe('saving a Plugin, PATCH /api/plugins/:id, against a real database', () 
 
     it('clears the cached output of a Mashup holding the Plugin in a slot', async () => {
       const plugin = await createPollPlugin()
-      const screen = await database.getRepository(Screen).save({ type: 'mashup', filename: 'Morning', order: 1, isActive: false, fetchManual: false, generatedAt: new Date(), cachedPluginOutput: '<div>stale</div>', renderSignal: 'skip', device: await addDevice('Kitchen') })
+      const device = await addDevice('Kitchen')
+      const screen = await database.getRepository(Screen).save({ type: 'mashup', filename: 'Morning', order: 1, fetchManual: false, device })
+      await database.getRepository(DeviceScreen).save({ isActive: false, generatedAt: new Date(), cachedPluginOutput: '<div>stale</div>', renderSignal: 'skip', device, screen })
       const configuration = await database.getRepository(MashupConfiguration).save({ layout: '1Lx1R', screen })
       await database.getRepository(MashupSlot).save({ position: 'left', size: 'view--half_vertical', order: 0, plugin: { id: plugin.id }, mashupConfiguration: configuration })
 
       await saved(plugin.id, { name: 'Forecast' })
 
-      const stored = await database.getRepository(Screen).findOneByOrFail({ id: screen.id })
+      const stored = await database.getRepository(DeviceScreen).findOneByOrFail({ screen: { id: screen.id } })
       expect(stored.cachedPluginOutput).toBeNull()
       expect(stored.renderSignal).toBeNull()
     })
@@ -742,11 +745,11 @@ describe('saving a Plugin, PATCH /api/plugins/:id, against a real database', () 
     it('clears a remembered Render Signal of a plain plugin Screen directly assigned the Plugin', async () => {
       const plugin = await createPollPlugin()
       const screenId = await assignments.assign(plugin.id, (await addDevice('Kitchen')).id)
-      await database.getRepository(Screen).update(screenId, { cachedPluginOutput: '<p>stale</p>', renderSignal: 'skip' })
+      await database.getRepository(DeviceScreen).update({ screen: { id: screenId } }, { cachedPluginOutput: '<p>stale</p>', renderSignal: 'skip' })
 
       await saved(plugin.id, { name: 'Forecast' })
 
-      const stored = await database.getRepository(Screen).findOneByOrFail({ id: screenId })
+      const stored = await database.getRepository(DeviceScreen).findOneByOrFail({ screen: { id: screenId } })
       expect(stored.renderSignal).toBeNull()
     })
 

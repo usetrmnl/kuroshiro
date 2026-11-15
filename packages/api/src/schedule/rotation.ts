@@ -29,8 +29,8 @@ export interface ScreenStateRead {
 const NO_STATE: ScreenStateRead = { state: null, stateCause: null, picked: false }
 
 /** Whether Rotation would pass over this Screen at `at`: its Schedule excludes it, or it carries a remembered `skip` Render Signal. */
-export function isPassedOver(screen: RotationScreen, at: Date): boolean {
-  return scheduleExclusion(screen.schedule, at) !== null || screen.renderSignal === 'skip'
+export function isPassedOver(passed: RotationScreen, at: Date): boolean {
+  return scheduleExclusion(passed.schedule, at) !== null || passed.renderSignal === 'skip'
 }
 
 /**
@@ -51,7 +51,7 @@ export function nextEligibleScreen<T extends RotationScreen>(screensInOrder: T[]
     if (picked && !isPassedOver(picked, at))
       return picked
   }
-  const activeIndex = screensInOrder.findIndex(screen => screen.isActive)
+  const activeIndex = screensInOrder.findIndex(candidate => candidate.isActive)
   if (stayOnActive && activeIndex !== -1 && !isPassedOver(screensInOrder[activeIndex], at))
     return screensInOrder[activeIndex]
   const startIndex = activeIndex === -1 ? 0 : activeIndex + 1
@@ -63,13 +63,13 @@ export function nextEligibleScreen<T extends RotationScreen>(screensInOrder: T[]
   return null
 }
 
-function ownState(screen: RotationScreen, now: Date): ScreenStateRead | null {
-  if (screen.isActive)
+function ownState(rotationScreen: RotationScreen, now: Date): ScreenStateRead | null {
+  if (rotationScreen.isActive)
     return { state: 'active', stateCause: null, picked: false }
-  const exclusion = scheduleExclusion(screen.schedule, now)
+  const exclusion = scheduleExclusion(rotationScreen.schedule, now)
   if (exclusion)
     return { ...exclusion, picked: false }
-  return screen.renderSignal === 'skip' ? { state: 'skipping', stateCause: null, picked: false } : null
+  return rotationScreen.renderSignal === 'skip' ? { state: 'skipping', stateCause: null, picked: false } : null
 }
 
 /**

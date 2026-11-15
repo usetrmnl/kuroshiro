@@ -13,9 +13,9 @@ import { DevicePlugin } from '../../plugins/entities/device-plugin.entity.js'
 import { Plugin } from '../../plugins/entities/plugin.entity.js'
 import { PluginExporterService } from '../../plugins/services/plugin-exporter.service.js'
 import { PluginFieldValuesService } from '../../plugins/services/plugin-field-values.service.js'
+import { screenImagePath } from '../../screens/screen-image-paths.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { INSTANCE_SETTINGS_ID, InstanceSettings } from '../../settings/entities/instance-settings.entity.js'
-import { resolveAppPath } from '../../utils/pathHelper.js'
 import { getApiVersion } from '../get-api-version.js'
 import { CONFIG_SCHEMA_VERSION } from '../schema-version.js'
 import { CONFIG_ARCHIVE_FILES } from '../types.js'
@@ -114,7 +114,7 @@ export class ConfigurationExportService {
     if (screen.type !== 'file') {
       return
     }
-    const imagePath = resolveAppPath('public', 'screens', 'devices', screen.device.id, `${screen.id}.png`)
+    const imagePath = screenImagePath(screen.device.id, screen.id)
     if (!existsSync(imagePath)) {
       return
     }

@@ -8,6 +8,7 @@ import { templateProblemOf } from 'kuroshiro-shared'
 import { Repository } from 'typeorm'
 import { DeviceModelsService } from '../../device-models/device-models.service.js'
 import { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { getErrorMessage } from '../../utils/getErrorMessage.js'
 import { templateOfSize } from '../plugin-templates.js'
@@ -34,6 +35,8 @@ export class PluginRenderCacheService {
     private readonly renderer: PluginRendererService,
     @InjectRepository(Screen)
     private readonly screenRepository: Repository<Screen>,
+    @InjectRepository(DeviceScreen)
+    private readonly deviceScreenRepository: Repository<DeviceScreen>,
     private readonly deviceModels: DeviceModelsService,
     private readonly deviceSensors: DeviceSensorsService,
   ) {
@@ -51,7 +54,7 @@ export class PluginRenderCacheService {
   /**
    * Renders the `full` Template, the one a Screen on its own shows, once per
    * Screen of the Plugin from the same data, each told its own Device as
-   * `trmnl.device` (ADR-0069) and laid with that Device's current Sensors, and caches each output to its Screen. Every
+   * `trmnl.device` (ADR-0069) and laid with that Device's current Sensors, and caches each output to its Device's record of the Screen. Every
    * Screen is rendered before the first is written, so a Template that fails
    * for one caches nothing, and `isSuperseded` is asked once more before the
    * first write, so a render a newer one has overtaken writes nothing. A
@@ -67,20 +70,20 @@ export class PluginRenderCacheService {
     const render = (deviceContext: PluginRenderContext['context']) => this.renderer.render(template.liquidMarkup, deviceContext).catch((error) => {
       throw new TemplateRenderError('full', error)
     })
-    const screens = await this.screenRepository.find({ where: { plugin: { id: plugin.id } }, relations: { device: true } })
-    if (screens.length === 0)
+    const records = await this.deviceScreenRepository.find({ where: { screen: { plugin: { id: plugin.id } } }, relations: { device: true } })
+    if (records.length === 0)
       await render(context)
 
-    const rendered: Array<{ screen: Screen, html: string }> = []
-    for (const screen of screens)
-      rendered.push({ screen, html: await render(await withTrmnlDevice(context, screen.device, this.deviceModels, await this.deviceSensors.findForDevice(screen.device.id))) })
+    const rendered: Array<{ record: DeviceScreen, html: string }> = []
+    for (const record of records)
+      rendered.push({ record, html: await render(await withTrmnlDevice(context, record.device, this.deviceModels, await this.deviceSensors.findForDevice(record.device.id))) })
 
     if (isSuperseded?.())
       return
 
     const generatedAt = new Date()
-    for (const { screen, html } of rendered)
-      await this.screenRepository.update(screen.id, { cachedPluginOutput: html, renderSignal: null, generatedAt })
+    for (const { record, html } of rendered)
+      await this.deviceScreenRepository.update(record.id, { cachedPluginOutput: html, renderSignal: null, generatedAt })
 
     await this.invalidateMashupCaches(plugin.id)
   }
@@ -97,8 +100,8 @@ export class PluginRenderCacheService {
       })
 
       for (const slot of mashupsWithPlugin) {
-        await this.screenRepository.update(
-          { id: slot.mashupConfiguration.screen.id },
+        await this.deviceScreenRepository.update(
+          { screen: { id: slot.mashupConfiguration.screen.id } },
           { cachedPluginOutput: null, renderSignal: null },
         )
       }
