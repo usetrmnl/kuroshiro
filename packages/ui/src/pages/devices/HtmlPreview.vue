@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DeviceDetail } from 'kuroshiro-shared'
+import type { RenderTarget } from './screenTarget'
 import { viewFull } from 'kuroshiro-shared'
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { listDeviceModels, listPalettes } from '@/api/device-models'
@@ -13,8 +13,8 @@ import { htmlScreenDocument, shellTargetOf } from './htmlPreview'
 import { rendersFor } from './screenSourceWording'
 
 const props = defineProps<{
-  /** The Device the HTML Screen is on: the preview is always for its Device Model and Palette. */
-  device: DeviceDetail
+  /** The Device the HTML Screen is rendered for: the preview is always for its Device Model and Palette. */
+  device: RenderTarget
   /** The markup as it is typed. */
   html: string
   /** The accessible name of the drawing: "Preview of Fridge note". */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DeviceDetail } from 'kuroshiro-shared'
+import type { ScreenTarget } from './screenTarget'
 import { computed, reactive } from 'vue'
 import { createScreen } from '@/api/screens'
 import CodeEditor from '@/components/CodeEditor.vue'
@@ -13,7 +13,7 @@ import ScreenNameField from './ScreenNameField.vue'
 import { htmlProblem, screenNameProblem } from './screenNaming'
 
 const props = defineProps<{
-  device: DeviceDetail
+  target: ScreenTarget
 }>()
 
 const addition = useAddScreen(['name', 'html'])
@@ -24,7 +24,7 @@ const changed = computed(() => !addition.added && (draft.name.trim() !== '' || d
 useReportScreenFormChanged(changed)
 
 function add() {
-  void addition.create(() => createScreen({ kind: 'html', deviceId: props.device.id, name: draft.name.trim(), html: draft.html, dither: draft.dither }), {
+  void addition.create(() => createScreen({ kind: 'html', owner: props.target.owner, name: draft.name.trim(), html: draft.html, dither: draft.dither }), {
     name: screenNameProblem(draft.name),
     html: htmlProblem(draft.html),
   })
@@ -38,7 +38,10 @@ function add() {
       <CodeEditor v-model="draft.html" v-bind="control" aria-label="HTML" mode="html" @save="add" />
     </Field>
     <DitheringField v-model="draft.dither" />
-    <HtmlPreview :device="device" :html="draft.html" name="Preview of the new Screen" />
+    <HtmlPreview v-if="target.rendersAs" :device="target.rendersAs" :html="draft.html" name="Preview of the new Screen" />
+    <p v-else class="no-preview">
+      No preview: {{ target.name }} has no Device yet to render it for.
+    </p>
     <AddScreenFoot :running="addition.running" :changed="changed" :failure="addition.failure" :guarded="false" />
   </form>
 </template>
@@ -53,6 +56,10 @@ function add() {
   .field.markup {
     justify-items: stretch;
     max-width: none;
+  }
+
+  .no-preview {
+    color: var(--color-ink-soft);
   }
 }
 </style>

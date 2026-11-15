@@ -22,7 +22,7 @@ const asking = ref(false)
 const wording = computed(() => unassignWording(plugin.value, props.device.name))
 
 function unassign() {
-  return unassignPlugin(plugin.value.id, props.device.id).catch((error: unknown) => {
+  return unassignPlugin(plugin.value.id, { kind: 'device', id: props.device.id }).catch((error: unknown) => {
     if (!isRefusal(error, 'assignment-not-found'))
       throw error
   })

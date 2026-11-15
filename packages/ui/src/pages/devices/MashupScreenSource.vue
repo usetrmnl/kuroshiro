@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { ScreenRead, UpdateMashupInput } from 'kuroshiro-shared'
+import type { UpdateMashupInput } from 'kuroshiro-shared'
+import type { ScreenBody } from './screenTarget'
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { listPlugins } from '@/api/plugins'
 import { updateMashup } from '@/api/screens'
@@ -13,9 +14,9 @@ import { layoutChoice, MASHUP_LAYOUT_CHOICES } from './mashupLayouts'
 import MashupSlots from './MashupSlots.vue'
 
 const props = defineProps<{
-  screen: ScreenRead
+  screen: ScreenBody
   /** `null` for a Mashup whose layout the server could not read. */
-  mashup: ScreenRead['mashup']
+  mashup: ScreenBody['mashup']
   /** Reads the Screens again, after a write to this one. */
   reload: () => Promise<void>
 }>()

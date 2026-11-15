@@ -1,4 +1,4 @@
-import type { ScreenRead } from 'kuroshiro-shared'
+import type { ScreenBody } from './screenTarget'
 import { ref, watch } from 'vue'
 import { updateScreen } from '@/api/screens'
 import { useSaveAsChanged } from '@/components/useSaveAsChanged'
@@ -7,7 +7,7 @@ import { useSaveAsChanged } from '@/components/useSaveAsChanged'
  * A File or External link Screen's Dithering switch, saved as changed: the switch alone is sent, then the Screens
  * are read again. A Screen read again with another value (a save elsewhere) is taken over unless a save is under way.
  */
-export function useScreenDither(screen: () => ScreenRead, reload: () => Promise<void>) {
+export function useScreenDither(screen: () => Pick<ScreenBody, 'id' | 'dither'>, reload: () => Promise<void>) {
   const dither = ref(screen().dither)
   const save = useSaveAsChanged(async (entered: boolean) => {
     const saved = await updateScreen(screen().id, { dither: entered })

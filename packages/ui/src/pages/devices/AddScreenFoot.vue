@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AddFormFoot from '@/patterns/AddFormFoot.vue'
-import { useDeviceFrame } from './deviceFrame'
+import { useScreenTarget } from './screenTarget'
 
 withDefaults(defineProps<{
   button?: string
@@ -19,7 +19,7 @@ withDefaults(defineProps<{
   guarded: true,
 })
 
-const { path } = useDeviceFrame()
+const { path } = useScreenTarget()
 </script>
 
 <template>

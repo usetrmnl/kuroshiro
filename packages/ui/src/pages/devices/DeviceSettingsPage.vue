@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DeviceDetail } from 'kuroshiro-shared'
 import type { SettingsReference } from './deviceSettings'
+import { listDeviceGroups } from '@/api/device-groups'
 import { listDeviceModels, listPalettes } from '@/api/device-models'
 import { listFirmware } from '@/api/firmware'
 import { getInstanceSettings } from '@/api/instance'
@@ -22,8 +23,8 @@ const { device, name } = useDeviceFrame()
 
 /** What the selects offer and what the Firmware section says: none of it changes with the Device, so it is read once. */
 const reference = useLoad<SettingsReference>(async () => {
-  const [{ models }, palettes, { firmware }, settings] = await Promise.all([listDeviceModels(), listPalettes(), listFirmware(), getInstanceSettings()])
-  return { models, palettes, firmware, firmwareAutoUpdate: settings.firmwareAutoUpdate.value }
+  const [{ models }, palettes, { firmware }, groups, settings] = await Promise.all([listDeviceModels(), listPalettes(), listFirmware(), listDeviceGroups(), getInstanceSettings()])
+  return { models, palettes, firmware, groups, firmwareAutoUpdate: settings.firmwareAutoUpdate.value }
 })
 
 const page = joinLoads<{ device: DeviceDetail, reference: SettingsReference }>({ device, reference })

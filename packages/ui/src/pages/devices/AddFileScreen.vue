@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DeviceDetail } from 'kuroshiro-shared'
+import type { ScreenTarget } from './screenTarget'
 import { computed, ref, useId, watch } from 'vue'
 import { isRefusal } from '@/api/client'
 import { createFileScreen } from '@/api/screens'
@@ -17,7 +17,7 @@ import { screenNameProblem } from './screenNaming'
 import { rendersFor } from './screenSourceWording'
 
 const props = defineProps<{
-  device: DeviceDetail
+  target: ScreenTarget
 }>()
 
 const facts = useInstanceFacts()
@@ -33,7 +33,7 @@ const file = ref<File | null>(null)
 const dither = ref(true)
 
 const maxBytes = computed(() => facts.data?.limits.imageUploadBytes)
-const convertedFor = computed(() => rendersFor(props.device))
+const convertedFor = computed(() => rendersFor(props.target.rendersAs))
 const changed = computed(() => !addition.added && (name.value.trim() !== '' || file.value !== null || !dither.value))
 useReportScreenFormChanged(changed)
 
@@ -50,7 +50,7 @@ function notTaken(error: unknown) {
 
 function add() {
   const chosen = file.value
-  void addition.create(() => createFileScreen({ deviceId: props.device.id, name: name.value.trim(), dither: dither.value }, chosen!), {
+  void addition.create(() => createFileScreen({ owner: props.target.owner, name: name.value.trim(), dither: dither.value }, chosen!), {
     name: screenNameProblem(name.value),
     file: chosen ? undefined : 'Choose an image to upload.',
   }, notTaken)

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { DeviceDetail, MashupLayout } from 'kuroshiro-shared'
+import type { MashupLayout } from 'kuroshiro-shared'
+import type { ScreenTarget } from './screenTarget'
 import { computed, ref, useId, watch } from 'vue'
 import { listPlugins } from '@/api/plugins'
 import { createMashup } from '@/api/screens'
@@ -15,7 +16,7 @@ import ScreenNameField from './ScreenNameField.vue'
 import { screenNameProblem } from './screenNaming'
 
 const props = defineProps<{
-  device: DeviceDetail
+  target: ScreenTarget
 }>()
 
 const FIRST_LAYOUT = MASHUP_LAYOUT_CHOICES[0]!.id
@@ -44,7 +45,7 @@ function add() {
   if (!isFilled.value)
     return
   void addition.create(() => createMashup({
-    deviceId: props.device.id,
+    owner: props.target.owner,
     name: name.value.trim(),
     layout: layout.value,
     pluginIds: inSlots.value.flatMap(pluginId => pluginId ?? []),
@@ -68,7 +69,7 @@ function add() {
         </p>
         <MashupSlots :slot-names="layoutChoice(layout).slotNames" :plugin-ids="inSlots" :plugins="data" @change="(slot, pluginId) => placed = placedIn(placed, slot, pluginId)" />
         <p class="hint">
-          Any Plugin can fill a slot, whether or not it is assigned to {{ device.name }}. A Plugin fills one slot at most.
+          Any Plugin can fill a slot, whether or not it is assigned to {{ target.name }}. A Plugin fills one slot at most.
         </p>
       </div>
       <AddScreenFoot :running="addition.running" :disabled="!isFilled" :changed="changed" :failure="addition.failure" :guarded="false" />

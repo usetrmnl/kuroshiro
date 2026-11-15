@@ -166,20 +166,20 @@ describe('toScreenRead', () => {
 })
 
 describe('toGroupScreen', () => {
-  it('reads the Screen without any one Device\'s state, with each member\'s state beside it', () => {
+  it('reads the Screen without any one Device\'s state, with each member\'s state and rendered image beside it', () => {
     const screen = makeScreen({ id: 'screen-note', type: 'html', filename: 'Note', html: '<p>Hi</p>', order: 2 })
 
     const read = toGroupScreen(screen, 'group-1', { requiredFieldEmpty: false, fetchAlertFiring: false }, [
-      { deviceId: 'device-1', state: { state: 'active', stateCause: null, picked: false }, isActive: true, renderSignal: null, generatedAt: new Date('2026-10-03T07:31:00.000Z') },
-      { deviceId: 'device-2', state: { state: 'upNext', stateCause: null, picked: true }, isActive: false, renderSignal: 'skip', generatedAt: null },
+      { deviceId: 'device-1', state: { state: 'active', stateCause: null, picked: false }, isActive: true, renderSignal: null, generatedAt: new Date('2026-10-03T07:31:00.000Z'), isRendered: true },
+      { deviceId: 'device-2', state: { state: 'upNext', stateCause: null, picked: true }, isActive: false, renderSignal: 'skip', generatedAt: null, isRendered: false },
     ])
 
     expect(read).toMatchObject({ id: 'screen-note', deviceGroupId: 'group-1', kind: 'html', name: 'Note', order: 2, html: '<p>Hi</p>' })
     expect(read).not.toHaveProperty('state')
     expect(read).not.toHaveProperty('deviceId')
     expect(read.perDevice).toEqual([
-      { deviceId: 'device-1', isActive: true, state: 'active', stateCause: null, picked: false, renderSignal: null, generatedAt: '2026-10-03T07:31:00.000Z' },
-      { deviceId: 'device-2', isActive: false, state: 'upNext', stateCause: null, picked: true, renderSignal: 'skip', generatedAt: null },
+      { deviceId: 'device-1', isActive: true, state: 'active', stateCause: null, picked: false, renderSignal: null, generatedAt: '2026-10-03T07:31:00.000Z', imagePath: '/screens/devices/device-1/screen-note.png?v=1791012660000', renderedAt: '2026-10-03T07:31:00.000Z' },
+      { deviceId: 'device-2', isActive: false, state: 'upNext', stateCause: null, picked: true, renderSignal: 'skip', generatedAt: null, imagePath: null, renderedAt: null },
     ])
   })
 })

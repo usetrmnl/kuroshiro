@@ -7,8 +7,10 @@ function toDeviceGroupMember(device: Device): DeviceGroupMember {
     id: device.id,
     name: device.name,
     friendlyId: device.friendlyId,
-    deviceModelName: device.deviceModel?.name ?? null,
-    paletteName: device.palette?.name ?? null,
+    deviceModel: device.deviceModel
+      ? { name: device.deviceModel.name, label: device.deviceModel.label, width: device.deviceModel.width, height: device.deviceModel.height, deprecated: device.deviceModel.deprecated }
+      : null,
+    palette: device.palette ? { id: device.palette.id, name: device.palette.name, kind: device.palette.kind } : null,
   }
 }
 

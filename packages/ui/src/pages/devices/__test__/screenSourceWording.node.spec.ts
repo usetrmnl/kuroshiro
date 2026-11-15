@@ -37,7 +37,7 @@ describe('the sentence of a Plugin Screen', () => {
 
 describe('what a confirmation says is lost and what stays', () => {
   it('names what is lost by the Screen\'s kind', () => {
-    const lost = (kind: 'file' | 'mashup' | 'html' | 'external') => removalWording(buildScreen({ kind, name: 'Harbour photo', plugin: null }), kitchen).lost
+    const lost = (kind: 'file' | 'mashup' | 'html' | 'external') => removalWording(buildScreen({ kind, name: 'Harbour photo', plugin: null }), kitchen.name).lost
     expect(lost('file')).toBe('The Screen, its Schedule and the uploaded image.')
     expect(lost('mashup')).toBe('The Screen, its Schedule and the Mashup\'s layout.')
     expect(lost('html')).toBe('The Screen, its Schedule and the HTML written for it.')
@@ -45,12 +45,12 @@ describe('what a confirmation says is lost and what stays', () => {
   })
 
   it('says the other Screens move up, and for a Mashup that its Plugins stay', () => {
-    expect(removalWording(buildScreen({ kind: 'file', name: 'Harbour photo', plugin: null }), kitchen)).toMatchObject({
+    expect(removalWording(buildScreen({ kind: 'file', name: 'Harbour photo', plugin: null }), kitchen.name)).toMatchObject({
       action: 'Delete Screen',
       title: 'Delete Harbour photo?',
       stays: 'Kitchen\'s other Screens, which move up in the Order.',
     })
-    expect(removalWording(buildScreen({ kind: 'mashup', name: 'Weekend board', plugin: null }), kitchen).stays).toBe('The Plugins in its slots.')
+    expect(removalWording(buildScreen({ kind: 'mashup', name: 'Weekend board', plugin: null }), kitchen.name).stays).toBe('The Plugins in its slots.')
   })
 
   it('words a Plugin Screen as unassigning', () => {
@@ -58,7 +58,7 @@ describe('what a confirmation says is lost and what stays', () => {
       kind: 'plugin',
       name: 'Weather',
       plugin: { id: 'weather', name: 'Weather', kind: 'Poll', requiredFieldEmpty: false, fetchAlertFiring: false },
-    }), kitchen)).toEqual({
+    }), kitchen.name)).toEqual({
       action: 'Unassign Plugin',
       title: 'Unassign Weather from Kitchen?',
       lost: 'This Screen on Kitchen and its Schedule.',
@@ -71,7 +71,7 @@ describe('what a confirmation says is lost and what stays', () => {
       kind: 'plugin',
       name: 'Doorbell',
       plugin: { id: 'doorbell', name: 'Doorbell', kind: 'Webhook', requiredFieldEmpty: false, fetchAlertFiring: false },
-    }), kitchen).stays).toBe('The Plugin Doorbell, with its template, its Webhook URL and its place in any Mashup.')
+    }), kitchen.name).stays).toBe('The Plugin Doorbell, with its template, its Webhook URL and its place in any Mashup.')
   })
 })
 

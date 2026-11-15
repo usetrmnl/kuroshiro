@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import type { ScreenRead } from 'kuroshiro-shared'
+import type { ScreenBody } from './screenTarget'
 import { RouterLink } from 'vue-router'
 import Button from '@/components/Button.vue'
-import { editHtmlPath } from './devicePaths'
+import { editHtmlPathOf, useScreenTarget } from './screenTarget'
 
 defineProps<{
-  screen: ScreenRead
+  screen: ScreenBody
 }>()
+
+const { path } = useScreenTarget()
 </script>
 
 <template>
   <p>Rendered from HTML written here, on every poll.</p>
   <div>
     <Button as-child>
-      <RouterLink :to="editHtmlPath(screen.deviceId, screen.id)">
+      <RouterLink :to="editHtmlPathOf(path, screen.id)">
         Edit HTML
       </RouterLink>
     </Button>

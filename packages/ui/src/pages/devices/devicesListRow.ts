@@ -18,15 +18,17 @@ export type RowFact
     | { kind: 'lastSeen', at: string }
     | { kind: 'words', text: string }
 
-/** The facts of a Devices list row, the firing Alerts first. A Device that never polled has nothing to report but that. */
+/** The facts of a Devices list row, the firing Alerts first, then the Device Group it shows. A Device that never polled has nothing more to report. */
 export function rowFacts({ device, alerts }: Pick<CurrentScreenTold, 'device' | 'alerts'>): RowFact[] {
   const firing = ALERTS_IN_ROW_ORDER
     .filter(kind => alerts.some(alert => alert.kind === kind))
     .map((kind): RowFact => ({ kind: 'alert', text: FIRING_ALERT_LABELS[kind] }))
+  const grouped: RowFact[] = device.deviceGroup ? [{ kind: 'words', text: `In ${device.deviceGroup.name}` }] : []
   if (device.lastSeenAt === null)
-    return [...firing, { kind: 'words', text: 'Has not called in yet' }]
+    return [...firing, ...grouped, { kind: 'words', text: 'Has not called in yet' }]
   return [
     ...firing,
+    ...grouped,
     { kind: 'lastSeen', at: device.lastSeenAt },
     ...device.batteryPercent === null ? [] : [{ kind: 'words' as const, text: `Battery ${device.batteryPercent} %` }],
   ]

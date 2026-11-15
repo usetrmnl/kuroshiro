@@ -22,7 +22,7 @@ Every route of the four route tables is in `router/routes.ts`. A page is a lazil
 { path: '/plugins', component: () => import('@/pages/plugins/PluginsListPage.vue') },
 ```
 
-- Routes are lazily loaded and addressed by path (`to="/devices/42/settings"`), not by name. They are flat, except under a frame several pages share: the pages of one Device are the children of `/devices/:deviceId` (see "The Device frame") and the Instance pages the children of `/instance` (see "The Instance frame").
+- Routes are lazily loaded and addressed by path (`to="/devices/42/settings"`), not by name. They are flat, except under a frame several pages share: the pages of one Device are the children of `/devices/:deviceId` (see "The Device frame"), those of one Device Group the children of `/device-groups/:groupId` (see "The Device Group frame") and the Instance pages the children of `/instance` (see "The Instance frame").
 - **The bar needs no entry.** Its entries are the Devices, "Plugins" and "Instance"; which one is current is read off the path, so any route under `/devices/:deviceId`, `/plugins` or `/instance` is already marked. `/alerts` marks the Alert indicator.
 - Never write a leading-slash URL by hand outside the router. The router knows the base path the UI is served under; `fetch` and `<img>` do not (see "Images" and "The API client").
 - **A redirect that depends on data** is the page's, not the router's: `/` lands by the number of Devices (`pages/LandingPage.vue`), and the Devices list replaces itself with `/connect` when there are none, each in a `watchEffect` on the shared read.
@@ -67,8 +67,50 @@ const { device, listed, name, path } = useDeviceFrame() // from '@/pages/devices
 | `path` | `/devices/{id}`, the Screens view, which the paths of the other pages start with. `devicePaths.ts` builds the paths of a Device's pages from its id |
 
 - The page does not render a `TitleLine` or `MissingPage` of its own, and reads `device.data`, `device.waiting` and `device.failure` for its own loading and failed states (`LoadBody :load="device"` when the Device is all it shows). `DeviceScreensPage.vue` shows how a page with a second load joins the two.
-- The frame's one title-line action is "Add Screen", on the Screens view while the Device has Screens. A page with an action of its own puts it in its body.
+- The frame's one title-line action is "Add Screen", on the Screens view while the Device has Screens of its own to add to. A page with an action of its own puts it in its body.
 - A page's first root sets its own space under the tabs: `margin-top: var(--space-8)`, and `var(--space-6)` on phone.
+
+### The Screen target
+
+Add Screen and Edit HTML stand under the Device frame and under the Device Group frame alike, so neither reads the Device: both read `useScreenTarget()` (`screenTarget.ts`), which each frame provides with `provideScreenTarget`.
+
+| Member | Is |
+| --- | --- |
+| `target` | A `ScreenTarget` once the owner has loaded: `owner` (`{ kind: 'device' \| 'deviceGroup', id }`, what every write that adds a Screen sends), `name`, and `rendersAs`, the Device whose Device Model and Palette previews and "converted for" draw for: the Device itself, or the Group's first member, `undefined` for a Group with no member |
+| `name`, `path` | The owner's name, and the path of its Screens view, which `addScreenPathOf(path)` and `editHtmlPathOf(path, screenId)` build on |
+| `waiting`, `failure`, `reload` | The owner's load, for the page's own loading and failed states, and what to call after a write that changes what the owner counts |
+| `listScreens()` | The owner's Screens, for Edit HTML |
+
+The parts of an opened Screen take what the Screen is whatever its owner: `ScreenBody` (a `ScreenRead` without any one Device's state, which a `GroupScreen` is too), the Device's `imagePath` and `renderedAt` beside it, `rendersAs` where a part draws, and the `owner` with its name where a part removes (`ScreenRemoval`). `ScreenPick` takes the Device it picks for, so a Group's opened row picks for each member.
+
+### The Device Group frame
+
+Every page of one Device Group is a child route of `/device-groups/:groupId`, whose component is `pages/devices/DeviceGroupFrame.vue`. The frame loads the Group (`GET /api/device-groups/:id`) and its Screens (`GET /api/device-groups/:id/screens`), both kept fresh, renders the title line with the Group's name, the link back "Devices" and "Add Screen" while the Group has Screens, and "No Device Group here" for one that does not exist. It provides `useDeviceGroupFrame()` (`group`, `screens`, `name`, `path`) and the Screen target.
+
+| File of `pages/devices/` | Holds |
+| --- | --- |
+| `DeviceGroupPage.vue` | The route's component: the lede and the four sections, over one `joinLoads` of the Group and its Screens |
+| `GroupName.vue` | The "Group" section: the Name row, saved as changed, refused on the field |
+| `GroupMembers.vue`, `GroupMemberRow.vue`, `AddGroupMember.vue` | "Devices in the Group": the member rows with "Remove" and its confirmation, and the picker that adds a Device (`PATCH /api/devices/:id` with `deviceGroupId`) |
+| `GroupScreensInOrder.vue`, `GroupOpenedScreen.vue` | The Group's "Screens in Order": the rows with the member chips and the first member's thumbnail, and the opened row with "On each Device", each member's rendering, state and `ScreenPick` |
+| `GroupDeletion.vue` | "Delete {Group}" with its confirmation; opens the Devices list |
+| `GroupScreensLoading.vue` | The skeleton |
+| `deviceGroups.ts` | The pure wording and rules, with a node spec: the name problem, the counts, a member's facts, the join candidates and note, a member's state words and the row's chips, the row's state and thumbnail, the confirmations |
+| `deviceGroupPaths.ts` | `deviceGroupPath(id)` |
+| `DeviceGroupsSection.vue`, `DeviceGroupRow.vue`, `NewGroupForm.vue` | The Device Groups under the Devices list: the heading with "New Group", one row per Group, and the form in place that creates one and opens its page |
+| `ParkedScreens.vue` | On the Screens view of a Device in a Group: its own Screens, tucked, read with `listOwnScreens` |
+| `ScreenSourceReadOnly.vue` | What an opened Screen a Device shows from its Group is made from, in one line, with "Open on {Group}" |
+| `SettingsDeviceGroup.vue` | The Device Group row of a Device's Settings |
+| `useScreensInOrder.ts` | `useScreensInOrder(screens, saveOrder)`: what both lists of Screens in Order do whatever owns them, with `MANY_SCREENS` and `screenRowId`: the Order the admin put the rows in until the server has it and its save, `reorder` and `move`, the opened row by `?screen=`, which name is being edited, and which Screens changed since their image was rendered |
+| `OpenedScreenParts.vue` | What both opened rows end with: the `#schedule`, `#source`, `#actionsBefore` and `#actionsAfter` slots around the move buttons, which keep the focus when one of them is disabled by reaching the end |
+| `ScreensHeading.vue` | The heading line of a list in the page: the title on the heavy rule, a `count` beside it, the slot at its right, and `focus()` for when the control that had the focus has gone |
+| `ScreenRowsSkeleton.vue` | The three rendering rows under "Screens in Order" while a list loads |
+| `screenMoves.ts` | `moveActions(place, total, jumps)`, the move buttons as `OpenedScreenParts` draws them |
+
+- `src/api/device-groups.ts` has `listDeviceGroups`, `getDeviceGroup`, `createDeviceGroup`, `updateDeviceGroup`, `deleteDeviceGroup`, `listGroupScreens` and `reorderGroupScreens`; `src/api/screens.ts` has `listOwnScreens`, and `unassignPlugin` takes the owner. The fixture builders are `buildDeviceGroupSummary`, `buildDeviceGroupMember`, `buildDeviceGroup`, `buildGroupScreen` and `buildGroupScreenDeviceState`.
+- `fakeShellReads` answers `GET /api/device-groups` too (`groups`, none by default), since the Devices list, where the shell lands, reads it.
+- `__test__/deviceGroupHarness.ts` fakes the Group Downstairs with Kitchen and Hallway in it and every write its page makes (`fakeDownstairs`), and the Devices list's Groups section with `POST /api/device-groups` (`fakeGroupsList`); `mountGroup(query?)`, `openedRow` and `rowChips` read it.
+- `ScreensInOrder.vue` reads `device.deviceGroup`: for a Device in a Group the rows are not sortable, have no "Rename", the Schedule as a summary, `ScreenSourceReadOnly` and no removal, and `OpenedScreen` gets `movable=false`; "Show next" stays.
 
 ### The Screens view's parts
 
@@ -86,7 +128,7 @@ const { device, listed, name, path } = useDeviceFrame() // from '@/pages/devices
 | `scheduleEditing.ts` | The pure rules of the editor: no stored weekday means every day, what a pair of times or dates sends (`changedOfPair`: only the ends that changed, and nothing while one is empty), today in the server's timezone (`dateInZone`), the timezone line |
 | `screenNaming.ts` | `screenName(name)`: a Screen saved without a name reads "Unnamed Screen" everywhere. `screenNameProblem(name)` is "A Screen needs a name." `possessive(name)` for "{Device}'s" |
 | `ScreenSource.vue` | What fills `#source`: the kind as a heading over one component per kind, `PluginScreenSource`, `MashupScreenSource`, `FileScreenSource`, `ExternalScreenSource` and `HtmlScreenSource`. It emits `rerendering` when a write leaves the Screen's image behind (a Slot Change), on which the preview shows the rendering plate until `renderedAt` moves |
-| `ScreenRename.vue`, `ScreenRemoval.vue` | "Rename" as the `InlineEdit` in the row's `#rename` slot, and "Delete Screen" or "Unassign Plugin" with its confirmation, which emits `removed` |
+| `ScreenRename.vue`, `ScreenRemoval.vue` | "Rename" as the `InlineEdit` in the row's `#rename` slot, and "Delete Screen" or "Unassign Plugin" with its confirmation, which emits `removed`; the removal takes the `owner` and its name, since a Plugin is unassigned from a Device or from a Device Group |
 | `mashupLayouts.ts` | `MASHUP_LAYOUT_CHOICES`: the seven layouts with the names and slot names of [devices.md](../ui/devices.md#by-kind), built from `MASHUP_LAYOUTS` and ready for `LayoutPicker`. `layoutChoice(id)`, `placedIn` for a Plugin put in a slot, and `carriedOver` and `withoutSlot` for a change of layout |
 | `MashupSlots.vue`, `MashupLayoutChange.vue` | One select per slot, a Plugin in another slot disabled (`slotNames`, `pluginIds` with `null` for an empty slot, `plugins`; emits `change`), and the layout form built on it |
 | `ReplaceFile.vue` | The drop zone, the preview beside the current image and "Replace image" |
@@ -102,10 +144,10 @@ const { device, listed, name, path } = useDeviceFrame() // from '@/pages/devices
 
 | File | Holds |
 | --- | --- |
-| `AddScreenPage.vue` | The route's component: the back link, the heading, the radio row and the chosen kind's form, which it hands the `device` once the frame has loaded it |
+| `AddScreenPage.vue` | The route's component: the back link, the heading, the radio row and the chosen kind's form, which it hands the Screen `target` once the frame has loaded its owner |
 | `addScreenKinds.ts` | `ADD_SCREEN_KINDS`, the kinds in the radio row's order. **A kind is one entry here and one form component** |
 | `addScreen.ts` | The page's pure parts, with a node spec: the kinds as they are offered, a Plugin as a choice, the search, which Plugin is checked, a File Screen's name from its file |
-| `addScreenForm.ts` | `useAddScreen(fields?, notAdded?)`: `create(request, found?, refusedAt?)` does nothing while a request is running (the editor's Ctrl/Cmd+S has no button to swallow it), sends nothing while `found` holds a problem at one of `fields`, runs the request and, once the Screen exists, settles every kind's form, opens the Screens view at `?screen={id}` and reads the Device again. `problems` goes to the fields (the browser's, then the server's by `fieldErrorsOf`, then what `refusedAt(error)` words for one field); `running`, `added` and `failure` go to the foot |
+| `addScreenForm.ts` | `useAddScreen(fields?, notAdded?)`: `create(request, found?, refusedAt?)` does nothing while a request is running (the editor's Ctrl/Cmd+S has no button to swallow it), sends nothing while `found` holds a problem at one of `fields`, runs the request and, once the Screen exists, settles every kind's form, opens the owner's Screens view at `?screen={id}` and reads the owner again (the Screen target's `reload`). `problems` goes to the fields (the browser's, then the server's by `fieldErrorsOf`, then what `refusedAt(error)` words for one field); `running`, `added` and `failure` go to the foot |
 | `AddScreenFoot.vue` | How every kind's form ends: the primary button (`button`, `running`, `disabled`), "Cancel", the failure and the "Joins the end of the Order" line. Its own "Leave without saving?" is off (`guarded={false}`); the page asks once for every kind |
 | `addScreenChanged.ts` | `provideScreenFormsChanged()`, `useReportScreenFormChanged(changed)` and `useSettleScreenForms()`: a kind's form reports its `changed` to the page in place of a guard of its own, so `AddScreenPage` can ask about every kind's kept-alive form, not only the one in view. Once a Screen is added `useAddScreen` settles every form before it navigates, so another kind's form that still holds something does not make a completed add ask |
 | `AddPluginScreen.vue`, `NoPluginToAssign.vue`, `AddMashupScreen.vue`, `AddExternalScreen.vue`, `AddFileScreen.vue`, `AddHtmlScreen.vue` | One form per kind |

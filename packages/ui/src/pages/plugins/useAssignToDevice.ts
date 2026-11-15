@@ -18,7 +18,7 @@ export function useAssignToDevice(deviceId: () => string) {
     running.value = true
     failure.value = undefined
     try {
-      await assignPlugin(plugin.value.id, { deviceId: deviceId() }).catch((error: unknown) => {
+      await assignPlugin(plugin.value.id, { owner: { kind: 'device', id: deviceId() } }).catch((error: unknown) => {
         if (!isRefusal(error, 'plugin-already-assigned'))
           throw error
       })

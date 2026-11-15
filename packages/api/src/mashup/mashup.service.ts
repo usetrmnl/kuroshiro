@@ -11,7 +11,6 @@ import { ApiException, ValidationException } from '../errors/api.exception.js'
 import { Plugin } from '../plugins/entities/plugin.entity.js'
 import { DeviceScreen } from '../screens/device-screen.entity.js'
 import { joinEndOfOrder } from '../screens/screen-order.js'
-import { ownerOfRequest } from '../screens/screen-owner.js'
 import { Screen } from '../screens/screens.entity.js'
 import { MASHUP_LAYOUT_CONFIG } from './constants/layouts.js'
 import { MashupConfiguration } from './entities/mashup-configuration.entity.js'
@@ -38,7 +37,7 @@ export class MashupService {
 
   /** Adds a Mashup at the end of the Device's Order and answers its Screen's id. */
   async create(input: CreateMashupDto): Promise<string> {
-    const owner = ownerOfRequest(input)!
+    const { owner } = input
     this.logger.log(`Creating mashup for ${owner.kind} ${owner.id}`)
     if (owner.kind === 'device' && !await this.deviceRepository.existsBy({ id: owner.id }))
       throw new ApiException(HttpStatus.NOT_FOUND, 'device-not-found', 'Device not found', { id: owner.id })

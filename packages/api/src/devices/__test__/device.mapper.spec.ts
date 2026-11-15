@@ -270,7 +270,8 @@ describe('toDeviceSummary', () => {
 
     const summary = toDeviceSummary(device, { now: NOW, servedScreen: weather })
 
-    expect(Object.keys(summary)).toEqual(['id', 'name', 'friendlyId', 'firmwareVersion', 'deviceModel', 'lastSeenAt', 'nextPollAt', 'batteryPercent', 'rssi', 'isMirrored', 'isProxied', 'sleep', 'currentScreen'])
+    expect(Object.keys(summary)).toEqual(['id', 'name', 'friendlyId', 'firmwareVersion', 'deviceModel', 'lastSeenAt', 'nextPollAt', 'batteryPercent', 'rssi', 'isMirrored', 'isProxied', 'sleep', 'currentScreen', 'deviceGroup'])
+    expect(summary.deviceGroup).toBeNull()
     expect(summary.deviceModel).toEqual({ name: 'og_plus', label: 'TRMNL OG (2-bit)', width: 800, height: 480, deprecated: false })
     expect(JSON.stringify(summary)).not.toContain('test-api-key')
     expect(JSON.stringify(summary)).not.toContain('mirror-secret')

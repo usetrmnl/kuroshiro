@@ -18,7 +18,8 @@ function instancePage(path: string, label: string, component: LazyPage): RouteRe
 /**
  * Every route of the four route tables of `docs/ui/`, each page
  * `{ path, component: () => import('@/pages/…Page.vue') }`.
- * The pages of one Device are the children of the Device frame, which loads the Device and has its title line and tabs.
+ * The pages of one Device are the children of the Device frame, which loads the Device and has its title line and tabs,
+ * and those of one Device Group the children of the Device Group frame, which does the same for the Group.
  * The Instance pages are the children of the Instance frame, which has the title line, the page list, Appearance and the version.
  */
 export const routes: RouteRecordRaw[] = [
@@ -37,6 +38,15 @@ export const routes: RouteRecordRaw[] = [
     ],
   },
   { path: '/connect', component: () => import('@/pages/devices/ConnectPage.vue') },
+  {
+    path: '/device-groups/:groupId',
+    component: () => import('@/pages/devices/DeviceGroupFrame.vue'),
+    children: [
+      { path: '', component: () => import('@/pages/devices/DeviceGroupPage.vue') },
+      { path: 'screens/new', component: () => import('@/pages/devices/AddScreenPage.vue') },
+      { path: 'screens/:screenId/html', component: () => import('@/pages/devices/EditHtmlPage.vue') },
+    ],
+  },
 
   { path: '/plugins', component: () => import('@/pages/plugins/PluginsListPage.vue') },
   { path: '/plugins/new', component: () => import('@/pages/plugins/AddPluginPage.vue'), beforeEnter: keepAddPluginOrigin },

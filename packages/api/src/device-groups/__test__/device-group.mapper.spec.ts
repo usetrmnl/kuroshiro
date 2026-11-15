@@ -6,9 +6,9 @@ import { toDeviceGroup, toDeviceGroupSummary } from '../device-group.mapper.js'
 const group = { id: 'group-1', name: 'Downstairs' }
 
 describe('toDeviceGroup', () => {
-  it('reads the Group with each member\'s Device Model and Palette by name, null where it has none', () => {
+  it('reads the Group with each member\'s Device Model and Palette, null where it has none', () => {
     const read = toDeviceGroup(group, [
-      makeDevice({ id: 'device-1', name: 'Kitchen', friendlyId: 'KITCHN', deviceModel: V2, palette: { id: 'bw', name: 'Black and white' } as never }),
+      makeDevice({ id: 'device-1', name: 'Kitchen', friendlyId: 'KITCHN', deviceModel: V2, palette: { id: 'bw', name: 'Black and white', kind: 'official' } as never }),
       makeDevice({ id: 'device-2', name: 'Hall', friendlyId: 'HALLWY', deviceModel: null, palette: null }),
     ])
 
@@ -16,8 +16,8 @@ describe('toDeviceGroup', () => {
       id: 'group-1',
       name: 'Downstairs',
       members: [
-        { id: 'device-1', name: 'Kitchen', friendlyId: 'KITCHN', deviceModelName: V2.name, paletteName: 'Black and white' },
-        { id: 'device-2', name: 'Hall', friendlyId: 'HALLWY', deviceModelName: null, paletteName: null },
+        { id: 'device-1', name: 'Kitchen', friendlyId: 'KITCHN', deviceModel: { name: V2.name, label: V2.label, width: V2.width, height: V2.height, deprecated: V2.deprecated }, palette: { id: 'bw', name: 'Black and white', kind: 'official' } },
+        { id: 'device-2', name: 'Hall', friendlyId: 'HALLWY', deviceModel: null, palette: null },
       ],
     })
   })

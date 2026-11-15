@@ -165,7 +165,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
   }
 
   function postHtmlScreen(overrides: Record<string, unknown> = {}): Promise<Response> {
-    return http.postJson('/api/screens', { deviceId: device.id, kind: 'html', name: 'Note', html: '<p>New</p>', ...overrides })
+    return http.postJson('/api/screens', { owner: { kind: 'device', id: device.id }, kind: 'html', name: 'Note', html: '<p>New</p>', ...overrides })
   }
 
   function postFileScreen(fields: Record<string, string>, file: Blob | null = new Blob([Buffer.from('raw-upload')])): Promise<Response> {
@@ -189,17 +189,17 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
   }
 
   const adders: Array<[string, () => Promise<Response>]> = [
-    ['an External link', () => http.postJson('/api/screens', { deviceId: device.id, kind: 'external', name: 'Added', url: 'https://example.com/a.png', fetchManual: false })],
-    ['a kept External link', () => http.postJson('/api/screens', { deviceId: device.id, kind: 'external', name: 'Added', url: 'https://example.com/a.png', fetchManual: true })],
-    ['a File', () => postFileScreen({ deviceId: device.id, kind: 'file', name: 'Added' })],
+    ['an External link', () => http.postJson('/api/screens', { owner: { kind: 'device', id: device.id }, kind: 'external', name: 'Added', url: 'https://example.com/a.png', fetchManual: false })],
+    ['a kept External link', () => http.postJson('/api/screens', { owner: { kind: 'device', id: device.id }, kind: 'external', name: 'Added', url: 'https://example.com/a.png', fetchManual: true })],
+    ['a File', () => postFileScreen({ 'owner[kind]': 'device', 'owner[id]': device.id, 'kind': 'file', 'name': 'Added' })],
     ['an HTML Screen', () => postHtmlScreen({ name: 'Added' })],
     ['a Mashup', async () => {
       const [left, right] = [await seedPlugin('Left'), await seedPlugin('Right')]
-      return http.postJson('/api/mashup', { deviceId: device.id, name: 'Added', layout: '1Lx1R', pluginIds: [left.id, right.id] })
+      return http.postJson('/api/mashup', { owner: { kind: 'device', id: device.id }, name: 'Added', layout: '1Lx1R', pluginIds: [left.id, right.id] })
     }],
     ['a Plugin Assignment', async () => {
       const plugin = await seedPlugin('Added')
-      return http.postJson(`/api/plugins/${plugin.id}/assign`, { deviceId: device.id })
+      return http.postJson(`/api/plugins/${plugin.id}/assign`, { owner: { kind: 'device', id: device.id } })
     }],
   ]
 
@@ -257,14 +257,14 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     })
 
     it('converts a File Screen\'s upload without dithering when the form says so', async () => {
-      const response = await postFileScreen({ deviceId: device.id, kind: 'file', name: 'Line art', dither: 'false' })
+      const response = await postFileScreen({ 'owner[kind]': 'device', 'owner[id]': device.id, 'kind': 'file', 'name': 'Line art', 'dither': 'false' })
 
       expect(await response.json()).toMatchObject({ kind: 'file', dither: false })
       expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.any(String), expect.anything(), expect.anything(), { dither: false })
     })
 
     it('fetches a kept External link without dithering when asked to', async () => {
-      await http.postJson('/api/screens', { deviceId: device.id, kind: 'external', name: 'Poster', url: 'https://example.com/poster.png', fetchManual: true, dither: false })
+      await http.postJson('/api/screens', { owner: { kind: 'device', id: device.id }, kind: 'external', name: 'Poster', url: 'https://example.com/poster.png', fetchManual: true, dither: false })
 
       expect(convertToPng).toHaveBeenCalledWith(expect.any(String), expect.any(String), expect.anything(), expect.anything(), { dither: false })
     })
@@ -286,7 +286,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     })
 
     it('answers the ScreenRead of an External link fetched on every poll without fetching it', async () => {
-      const response = await http.postJson('/api/screens', { deviceId: device.id, kind: 'external', name: 'Cam', url: 'http://cam.local/now.jpg', fetchManual: false })
+      const response = await http.postJson('/api/screens', { owner: { kind: 'device', id: device.id }, kind: 'external', name: 'Cam', url: 'http://cam.local/now.jpg', fetchManual: false })
 
       expect(response.status).toBe(201)
       expect(await response.json()).toMatchObject({ kind: 'external', external: { url: 'http://cam.local/now.jpg', fetchManual: false } })
@@ -294,7 +294,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     })
 
     it('fetches and converts a kept External link before answering', async () => {
-      const response = await http.postJson('/api/screens', { deviceId: device.id, kind: 'external', name: 'Poster', url: 'https://example.com/poster.png', fetchManual: true })
+      const response = await http.postJson('/api/screens', { owner: { kind: 'device', id: device.id }, kind: 'external', name: 'Poster', url: 'https://example.com/poster.png', fetchManual: true })
 
       const screen: ScreenRead = await response.json()
       expect(screen).toMatchObject({ kind: 'external', external: { url: 'https://example.com/poster.png', fetchManual: true } })
@@ -309,7 +309,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     ])('answers 422 image-fetch-failed with details.reason and leaves no Screen and no file behind when %s of a kept External link fails', async (_step, fail, reason) => {
       fail()
 
-      const response = await http.postJson('/api/screens', { deviceId: device.id, kind: 'external', name: 'Poster', url: 'https://example.com/poster.png', fetchManual: true })
+      const response = await http.postJson('/api/screens', { owner: { kind: 'device', id: device.id }, kind: 'external', name: 'Poster', url: 'https://example.com/poster.png', fetchManual: true })
 
       expect(response.status).toBe(422)
       expect(await response.json()).toMatchObject({ statusCode: 422, code: 'image-fetch-failed', details: { reason } })
@@ -318,7 +318,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     })
 
     it('stores the name, pixel size and byte size of a File Screen\'s upload', async () => {
-      const response = await postFileScreen({ deviceId: device.id, kind: 'file', name: 'Holiday' })
+      const response = await postFileScreen({ 'owner[kind]': 'device', 'owner[id]': device.id, 'kind': 'file', 'name': 'Holiday' })
 
       expect(response.status).toBe(201)
       const screen: ScreenRead = await response.json()
@@ -330,7 +330,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     it('answers 400 image-unreadable and leaves no Screen and no file behind for an upload that is not an image', async () => {
       vi.mocked(readImageSize).mockRejectedValue(new Error('Unsupported or unrecognised image format'))
 
-      const response = await postFileScreen({ deviceId: device.id, kind: 'file', name: 'Notes' })
+      const response = await postFileScreen({ 'owner[kind]': 'device', 'owner[id]': device.id, 'kind': 'file', 'name': 'Notes' })
 
       expect(response.status).toBe(400)
       expect(await response.json()).toMatchObject({ statusCode: 400, code: 'image-unreadable' })
@@ -341,7 +341,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     it('refuses a file in demo mode with 403 demo-mode', async () => {
       config.get.mockImplementation((key: string) => key === 'demo_mode')
 
-      const response = await postFileScreen({ deviceId: device.id, kind: 'file', name: 'Holiday' })
+      const response = await postFileScreen({ 'owner[kind]': 'device', 'owner[id]': device.id, 'kind': 'file', 'name': 'Holiday' })
 
       expect(response.status).toBe(403)
       expect(await response.json()).toMatchObject({ statusCode: 403, code: 'demo-mode' })
@@ -349,7 +349,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     })
 
     it('refuses a File Screen without a file, naming the part', async () => {
-      const response = await postFileScreen({ deviceId: device.id, kind: 'file', name: 'Holiday' }, null)
+      const response = await postFileScreen({ 'owner[kind]': 'device', 'owner[id]': device.id, 'kind': 'file', 'name': 'Holiday' }, null)
 
       expect(response.status).toBe(400)
       expect(await response.json()).toMatchObject({ code: 'validation', fields: [{ path: 'file' }] })
@@ -374,7 +374,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     })
 
     it('answers 404 device-not-found for an unknown Device', async () => {
-      const response = await postHtmlScreen({ deviceId: UNKNOWN_ID })
+      const response = await postHtmlScreen({ owner: { kind: 'device', id: UNKNOWN_ID } })
 
       expect(response.status).toBe(404)
       expect(await response.json()).toMatchObject({ code: 'device-not-found' })
@@ -385,7 +385,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     it('answers the ScreenRead of the Mashup with its slots in slot order', async () => {
       const [left, right] = [await seedPlugin('Weather'), await seedPlugin('Calendar')]
 
-      const response = await http.postJson('/api/mashup', { deviceId: device.id, name: ' Morning ', layout: '1Lx1R', pluginIds: [left.id, right.id] })
+      const response = await http.postJson('/api/mashup', { owner: { kind: 'device', id: device.id }, name: ' Morning ', layout: '1Lx1R', pluginIds: [left.id, right.id] })
 
       expect(response.status).toBe(201)
       expect(await response.json()).toMatchObject({
@@ -404,7 +404,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     it('answers 400 for a Plugin count that does not match the layout', async () => {
       const plugin = await seedPlugin('Weather')
 
-      const response = await http.postJson('/api/mashup', { deviceId: device.id, name: 'Morning', layout: '1Lx1R', pluginIds: [plugin.id] })
+      const response = await http.postJson('/api/mashup', { owner: { kind: 'device', id: device.id }, name: 'Morning', layout: '1Lx1R', pluginIds: [plugin.id] })
 
       expect(response.status).toBe(400)
       expect(await response.json()).toMatchObject({ code: 'validation', fields: [{ path: 'pluginIds' }] })
@@ -414,7 +414,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     it('answers 400 for a repeated Plugin', async () => {
       const plugin = await seedPlugin('Weather')
 
-      const response = await http.postJson('/api/mashup', { deviceId: device.id, name: 'Morning', layout: '1Lx1R', pluginIds: [plugin.id, plugin.id] })
+      const response = await http.postJson('/api/mashup', { owner: { kind: 'device', id: device.id }, name: 'Morning', layout: '1Lx1R', pluginIds: [plugin.id, plugin.id] })
 
       expect(response.status).toBe(400)
       expect(await response.json()).toMatchObject({ code: 'validation', fields: [{ path: 'pluginIds' }] })
@@ -423,7 +423,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     it('answers 404 plugin-not-found for an unknown Plugin and creates nothing', async () => {
       const plugin = await seedPlugin('Weather')
 
-      const response = await http.postJson('/api/mashup', { deviceId: device.id, name: 'Morning', layout: '1Lx1R', pluginIds: [plugin.id, UNKNOWN_ID] })
+      const response = await http.postJson('/api/mashup', { owner: { kind: 'device', id: device.id }, name: 'Morning', layout: '1Lx1R', pluginIds: [plugin.id, UNKNOWN_ID] })
 
       expect(response.status).toBe(404)
       expect(await response.json()).toMatchObject({ code: 'plugin-not-found' })
@@ -431,14 +431,14 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     })
 
     it.each([
-      ['an unknown Device', { deviceId: UNKNOWN_ID }, 404, 'device-not-found'],
+      ['an unknown Device', { owner: { kind: 'device', id: UNKNOWN_ID } }, 404, 'device-not-found'],
       ['an empty name', { name: ' ' }, 400, 'validation'],
       ['the old filename key', { filename: 'Morning' }, 400, 'validation'],
       ['an unknown layout', { layout: '3x3' }, 400, 'validation'],
     ])('answers for %s', async (_case, overrides, status, code) => {
       const [left, right] = [await seedPlugin('Weather'), await seedPlugin('Calendar')]
 
-      const response = await http.postJson('/api/mashup', { deviceId: device.id, name: 'Morning', layout: '1Lx1R', pluginIds: [left.id, right.id], ...overrides })
+      const response = await http.postJson('/api/mashup', { owner: { kind: 'device', id: device.id }, name: 'Morning', layout: '1Lx1R', pluginIds: [left.id, right.id], ...overrides })
 
       expect(response.status).toBe(status)
       expect(await response.json()).toMatchObject({ code })
@@ -449,14 +449,14 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     it('answers the ScreenRead of the Plugin Screen', async () => {
       const plugin = await seedPlugin('Weather')
 
-      const response = await http.postJson(`/api/plugins/${plugin.id}/assign`, { deviceId: device.id })
+      const response = await http.postJson(`/api/plugins/${plugin.id}/assign`, { owner: { kind: 'device', id: device.id } })
 
       expect(response.status).toBe(201)
       expect(await response.json()).toMatchObject({ kind: 'plugin', name: 'Weather', order: 1, plugin: { id: plugin.id, name: 'Weather' } })
     })
 
     it('answers 404 plugin-not-found for an unknown Plugin', async () => {
-      const response = await http.postJson(`/api/plugins/${UNKNOWN_ID}/assign`, { deviceId: device.id })
+      const response = await http.postJson(`/api/plugins/${UNKNOWN_ID}/assign`, { owner: { kind: 'device', id: device.id } })
 
       expect(response.status).toBe(404)
       expect(await response.json()).toMatchObject({ code: 'plugin-not-found' })
@@ -465,7 +465,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     it('answers 404 device-not-found for an unknown Device', async () => {
       const plugin = await seedPlugin('Weather')
 
-      const response = await http.postJson(`/api/plugins/${plugin.id}/assign`, { deviceId: UNKNOWN_ID })
+      const response = await http.postJson(`/api/plugins/${plugin.id}/assign`, { owner: { kind: 'device', id: UNKNOWN_ID } })
 
       expect(response.status).toBe(404)
       expect(await response.json()).toMatchObject({ code: 'device-not-found' })
@@ -474,7 +474,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     it('answers 400 for an extra body key', async () => {
       const plugin = await seedPlugin('Weather')
 
-      const response = await http.postJson(`/api/plugins/${plugin.id}/assign`, { deviceId: device.id, isActive: true })
+      const response = await http.postJson(`/api/plugins/${plugin.id}/assign`, { owner: { kind: 'device', id: device.id }, isActive: true })
 
       expect(response.status).toBe(400)
       expect(await response.json()).toMatchObject({ code: 'validation', fields: [{ path: 'isActive' }] })
@@ -483,9 +483,9 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
 
     it('answers 409 plugin-already-assigned for a second assignment of the same Plugin', async () => {
       const plugin = await seedPlugin('Weather')
-      await http.postJson(`/api/plugins/${plugin.id}/assign`, { deviceId: device.id })
+      await http.postJson(`/api/plugins/${plugin.id}/assign`, { owner: { kind: 'device', id: device.id } })
 
-      const response = await http.postJson(`/api/plugins/${plugin.id}/assign`, { deviceId: device.id })
+      const response = await http.postJson(`/api/plugins/${plugin.id}/assign`, { owner: { kind: 'device', id: device.id } })
 
       expect(response.status).toBe(409)
       expect(await response.json()).toMatchObject({ code: 'plugin-already-assigned' })
@@ -503,7 +503,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
         return null
       })
 
-      const response = await http.postJson(`/api/plugins/${plugin.id}/assign`, { deviceId: device.id })
+      const response = await http.postJson(`/api/plugins/${plugin.id}/assign`, { owner: { kind: 'device', id: device.id } })
 
       expect(response.status).toBe(409)
       expect(await response.json()).toMatchObject({ code: 'plugin-already-assigned' })
@@ -517,7 +517,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     it('answers 204 and closes the gap in the Order after deleting a Mashup', async () => {
       const [left, right] = [await seedPlugin('Weather'), await seedPlugin('Calendar')]
       await seedScreen(1, { filename: 'First', isActive: true })
-      const mashup: ScreenRead = await (await http.postJson('/api/mashup', { deviceId: device.id, name: 'Morning', layout: '1Lx1R', pluginIds: [left.id, right.id] })).json()
+      const mashup: ScreenRead = await (await http.postJson('/api/mashup', { owner: { kind: 'device', id: device.id }, name: 'Morning', layout: '1Lx1R', pluginIds: [left.id, right.id] })).json()
       await seedScreen(3, { filename: 'Last' })
 
       const response = await deleteRequest(`/api/screens/${mashup.id}`)
@@ -539,15 +539,15 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
 
     it('removes the Plugin Assignment of a deleted Plugin Screen, so the Plugin can be assigned again', async () => {
       const plugin = await seedPlugin('Weather')
-      const assigned: ScreenRead = await (await http.postJson(`/api/plugins/${plugin.id}/assign`, { deviceId: device.id })).json()
+      const assigned: ScreenRead = await (await http.postJson(`/api/plugins/${plugin.id}/assign`, { owner: { kind: 'device', id: device.id } })).json()
 
       await deleteRequest(`/api/screens/${assigned.id}`)
 
-      expect((await http.postJson(`/api/plugins/${plugin.id}/assign`, { deviceId: device.id })).status).toBe(201)
+      expect((await http.postJson(`/api/plugins/${plugin.id}/assign`, { owner: { kind: 'device', id: device.id } })).status).toBe(201)
     })
 
     it('removes the stored image and its original', async () => {
-      const kept: ScreenRead = await (await http.postJson('/api/screens', { deviceId: device.id, kind: 'external', name: 'Poster', url: 'https://example.com/poster.png', fetchManual: true })).json()
+      const kept: ScreenRead = await (await http.postJson('/api/screens', { owner: { kind: 'device', id: device.id }, kind: 'external', name: 'Poster', url: 'https://example.com/poster.png', fetchManual: true })).json()
 
       await deleteRequest(`/api/screens/${kept.id}`)
 
@@ -566,7 +566,7 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     it('answers 204 and closes the gap in the Order', async () => {
       const plugin = await seedPlugin('Weather')
       await seedScreen(1, { filename: 'First', isActive: true })
-      await http.postJson(`/api/plugins/${plugin.id}/assign`, { deviceId: device.id })
+      await http.postJson(`/api/plugins/${plugin.id}/assign`, { owner: { kind: 'device', id: device.id } })
       await seedScreen(3, { filename: 'Last' })
 
       const response = await deleteRequest(`/api/plugins/${plugin.id}/assignments/${device.id}`)

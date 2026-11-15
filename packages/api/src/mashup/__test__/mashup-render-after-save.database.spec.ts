@@ -104,7 +104,7 @@ describe('a Mashup\'s image renders right after its save, against a real databas
   }
 
   async function createSettledMashup(): Promise<ScreenRead> {
-    const createResponse = await http.postJson('/api/mashup', { deviceId: device.id, name: 'Dashboard', layout: '1Lx1R', pluginIds: [pluginA.id, pluginB.id] })
+    const createResponse = await http.postJson('/api/mashup', { owner: { kind: 'device', id: device.id }, name: 'Dashboard', layout: '1Lx1R', pluginIds: [pluginA.id, pluginB.id] })
     expect(createResponse.status).toBe(201)
     const created: ScreenRead = await createResponse.json()
     await vi.waitFor(async () => expect((await screenReadFor(created.id, device.id)).renderedAt).not.toBeNull())

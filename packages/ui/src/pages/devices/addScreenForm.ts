@@ -1,10 +1,10 @@
-import type { ScreenRead } from 'kuroshiro-shared'
+import type { OwnedScreen } from '@/api/screens'
 import { nextTick, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { fieldErrorsOf } from '@/api/client'
 import { failureReason } from '@/components/failureReason'
 import { useSettleScreenForms } from './addScreenChanged'
-import { useDeviceFrame } from './deviceFrame'
+import { useScreenTarget } from './screenTarget'
 
 /**
  * What every kind's form of Add Screen does with its request. `fields` are the fields the form shows a problem at:
@@ -16,7 +16,7 @@ export function useAddScreen<Field extends string = never>(fields: readonly Fiel
   type Problems = Partial<Record<Field, string>>
 
   const router = useRouter()
-  const { device, path } = useDeviceFrame()
+  const { path, reload } = useScreenTarget()
   const settleForms = useSettleScreenForms()
 
   const running = ref(false)
@@ -30,7 +30,7 @@ export function useAddScreen<Field extends string = never>(fields: readonly Fiel
    * `refusedAt` words a refusal that is about one field, by that field: an address that gave no image.
    * A second call while one is running does nothing: the editor's Mod-S calls this without the button's guard.
    */
-  async function create(request: () => Promise<ScreenRead>, found: Problems = {}, refusedAt: (error: unknown) => Problems = () => ({})) {
+  async function create(request: () => Promise<OwnedScreen>, found: Problems = {}, refusedAt: (error: unknown) => Problems = () => ({})) {
     if (running.value)
       return
     problems.value = found
@@ -49,7 +49,7 @@ export function useAddScreen<Field extends string = never>(fields: readonly Fiel
       settleForms()
       await nextTick()
       await router.push({ path: path.value, query: { screen: screen.id } })
-      void device.reload()
+      void reload()
     }
     running.value = false
   }

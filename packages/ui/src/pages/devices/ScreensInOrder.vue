@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DeviceDetail, ScreenRead } from 'kuroshiro-shared'
-import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, useTemplateRef } from 'vue'
+import { RouterLink } from 'vue-router'
 import { imageUrl } from '@/api/client'
 import { reorderScreens } from '@/api/screens'
 import Button from '@/components/Button.vue'
@@ -9,132 +9,87 @@ import EmptyState from '@/components/EmptyState.vue'
 import Plate from '@/components/Plate.vue'
 import SaveState from '@/components/SaveState.vue'
 import ScreenRow from '@/components/ScreenRow.vue'
-import { isPassedOver, movedBy, SCREEN_KIND_LABELS } from '@/components/screenRows'
+import { isPassedOver, SCREEN_KIND_LABELS } from '@/components/screenRows'
 import ScreenRows from '@/components/ScreenRows.vue'
-import { useSaveAsChanged } from '@/components/useSaveAsChanged'
 import { useDeviceFrame } from './deviceFrame'
+import { deviceGroupPath } from './deviceGroupPaths'
 import { addScreenPath, deviceSettingsPath } from './devicePaths'
 import OpenedScreen from './OpenedScreen.vue'
 import RowSchedule from './RowSchedule.vue'
 import ScheduleEditor from './ScheduleEditor.vue'
+import ScheduleSummary from './ScheduleSummary.vue'
 import { possessive, screenName } from './screenNaming'
 import ScreenPick from './ScreenPick.vue'
 import ScreenRemoval from './ScreenRemoval.vue'
 import ScreenRename from './ScreenRename.vue'
+import ScreensHeading from './ScreensHeading.vue'
 import ScreenSource from './ScreenSource.vue'
+import ScreenSourceReadOnly from './ScreenSourceReadOnly.vue'
 import { screenStateWords } from './screenWording'
 import { linkTo, sentence } from './sentence'
 import SentenceLine from './SentenceLine.vue'
+import { screenRowId, useScreensInOrder } from './useScreensInOrder'
 
 const props = defineProps<{
   device: DeviceDetail
-  /** The Device's Screens in Order, as the server has them. */
+  /** The Screens the Device shows in Order, as the server has them: its Device Group's while it is a member, its own otherwise. */
   screens: ScreenRead[]
   /** Reads the Screens again, after the Order has changed. */
   reload: () => Promise<void>
 }>()
 
-/** From this many Screens on the heading counts them, and an opened row can jump to the top and to the end of the Order. */
-const MANY_SCREENS = 9
+/** The Screens are the Device Group's: read here with this Device's state, edited on the Group. "Show next" still picks for this Device. */
+const group = computed(() => props.device.deviceGroup)
+const readOnly = computed(() => group.value !== null)
 
-const route = useRoute()
-const router = useRouter()
+const list = useScreensInOrder(() => props.screens, async (ids) => {
+  await reorderScreens(props.device.id, { screenIds: ids })
+  await props.reload()
+})
 
-/** The Order the admin put the rows in, until the server's answer holds it. */
-const entered = ref<string[]>()
-
-function inEnteredOrder(screens: ScreenRead[], ids: string[] | undefined) {
-  if (!ids)
-    return screens
-  const byId = new Map(screens.map(screen => [screen.id, screen]))
-  return [...ids.flatMap(id => byId.get(id) ?? []), ...screens.filter(screen => !ids.includes(screen.id))]
-}
-
-const isMany = computed(() => props.screens.length >= MANY_SCREENS)
-
-const rows = computed(() => inEnteredOrder(props.screens, entered.value).map(screen => ({
+const rows = computed(() => list.ordered.map(screen => ({
   ...screen,
   name: screenName(screen.name),
   savedName: screen.name,
   stateWords: screenStateWords(screen, props.device),
 })))
 
-const orderSave = useSaveAsChanged(async (ids) => {
-  if (!ids)
-    return
-  await reorderScreens(props.device.id, { screenIds: ids })
-  await props.reload()
-  if (entered.value === ids)
-    entered.value = undefined
-}, entered)
-
-// A save that failed puts the rows back where the server has them.
-watch(() => orderSave.status, (status) => {
-  if (status === 'failed')
-    entered.value = undefined
-})
-
-function reorder(ids: string[]) {
-  entered.value = ids
-  orderSave.commit()
-}
-
-function move(id: string, by: number) {
-  reorder(movedBy(rows.value.map(screen => screen.id), id, by))
-}
-
-const open = computed({
-  get: () => typeof route.query.screen === 'string' ? route.query.screen : undefined,
-  set: id => void router.replace({ query: { ...route.query, screen: id || undefined } }),
-})
-
-/** The Screen whose name is being edited in its row. */
-const renaming = ref<string>()
-
-watch(open, () => {
-  renaming.value = undefined
-})
-
-function setRenaming(screenId: string, isRenaming: boolean) {
-  renaming.value = isRenaming ? screenId : undefined
-}
-
-/** The Screens changed since their image was rendered, each with when that image was rendered. */
-const outdatedImages = ref<Record<string, string | null>>({})
-
-function awaitRendering(screen: ScreenRead) {
-  outdatedImages.value = { ...outdatedImages.value, [screen.id]: screen.renderedAt }
-}
-
-const isOutdated = (screen: ScreenRead) => screen.id in outdatedImages.value && outdatedImages.value[screen.id] === screen.renderedAt
-
 const frame = useDeviceFrame()
 const heading = useTemplateRef('heading')
 
 /** The Device counts its Screens, so it is read again too. The removed row held the focus, which the heading takes. */
 async function showWithoutRemoved() {
-  open.value = undefined
+  list.open = undefined
   await Promise.all([props.reload(), frame.device.reload()])
   await nextTick()
   heading.value?.focus()
 }
-
-const rowId = (screenId: string) => `screen-${screenId}`
-
-onMounted(() => {
-  if (open.value)
-    document.getElementById(rowId(open.value))?.scrollIntoView()
-})
 
 const pausedNote = computed(() => sentence(
   'Rotation is paused while Mirroring is on. These Screens are kept and can still be edited; they return when you switch Mirroring off in ',
   linkTo('Settings', deviceSettingsPath(props.device.id)),
   '.',
 ))
+
+const fromGroupNote = computed(() => group.value && sentence(
+  'Screens from ',
+  linkTo(group.value.name, deviceGroupPath(group.value.id)),
+  `, shown by every Device in it. They are edited there; ${props.device.name} walks the Order at its own pace.`,
+))
 </script>
 
 <template>
-  <EmptyState v-if="screens.length === 0" class="no-screens" :title="`Add ${possessive(device.name)} first Screen`">
+  <EmptyState v-if="screens.length === 0 && group" class="no-screens" :title="`No Screens in ${group.name} yet`">
+    {{ device.name }} shows {{ possessive(group.name) }} Screens, and the Group has none yet. Add one on the Group and every Device in it shows it.
+    <template #action>
+      <Button as-child variant="primary">
+        <RouterLink :to="deviceGroupPath(group.id)">
+          Open {{ group.name }}
+        </RouterLink>
+      </Button>
+    </template>
+  </EmptyState>
+  <EmptyState v-else-if="screens.length === 0" class="no-screens" :title="`Add ${possessive(device.name)} first Screen`">
     A Screen is one thing the Device shows: a Plugin, a Mashup, an image from a link or a file, or HTML you write. With more than one, {{ device.name }} steps through them in Order, one per poll.
     <template #action>
       <Button as-child variant="primary">
@@ -145,27 +100,25 @@ const pausedNote = computed(() => sentence(
     </template>
   </EmptyState>
   <section v-else class="screens-in-order" aria-labelledby="screens-in-order-heading">
-    <div class="heading-line">
-      <h2 ref="heading" class="heading" tabindex="-1">
-        <span id="screens-in-order-heading">Screens in Order</span> <span v-if="isMany" class="count">{{ screens.length }}</span>
-      </h2>
-      <SaveState :status="orderSave.status" :reason="orderSave.reason" @retry="orderSave.retry" />
-    </div>
-    <SentenceLine v-if="device.isMirrored" class="paused" :sentence="pausedNote" />
-    <ScreenRows v-model:open="open" :items="rows" sortable @reorder="reorder">
+    <ScreensHeading id="screens-in-order-heading" ref="heading" title="Screens in Order" :count="list.isMany ? screens.length : undefined">
+      <SaveState :status="list.orderSave.status" :reason="list.orderSave.reason" @retry="list.orderSave.retry" />
+    </ScreensHeading>
+    <SentenceLine v-if="fromGroupNote" class="note from-group" :sentence="fromGroupNote" />
+    <SentenceLine v-if="device.isMirrored" class="note paused" :sentence="pausedNote" />
+    <ScreenRows v-model:open="list.open" :items="rows" :sortable="!readOnly" @reorder="list.reorder">
       <template #default="{ item }">
         <ScreenRow
-          :id="rowId(item.id)"
+          :id="screenRowId(item.id)"
           class="row"
           :value="item.id"
           :name="item.name"
           :kind="SCREEN_KIND_LABELS[item.kind]"
           :state="item.state"
           :passed-over="device.isMirrored || undefined"
-          :renaming="renaming === item.id"
+          :renaming="list.renaming === item.id"
         >
-          <template v-if="item.kind !== 'plugin'" #rename>
-            <ScreenRename :screen-id="item.id" :name="item.savedName" :reload="reload" :editing="renaming === item.id" @update:editing="isRenaming => setRenaming(item.id, isRenaming)" />
+          <template v-if="item.kind !== 'plugin' && !readOnly" #rename>
+            <ScreenRename :screen-id="item.id" :name="item.savedName" :reload="reload" :editing="list.renaming === item.id" @update:editing="isRenaming => list.setRenaming(item.id, isRenaming)" />
           </template>
           <template #thumbnail>
             <Plate
@@ -179,26 +132,33 @@ const pausedNote = computed(() => sentence(
             />
           </template>
           <template #schedule>
-            <RowSchedule :screen="item" :reload="reload" />
+            <RowSchedule :screen="item" :reload="reload" :read-only="readOnly" />
           </template>
           <template #state>
             <span>{{ item.stateWords.words }}<span v-if="item.stateWords.qualifier" class="qualifier"> · {{ item.stateWords.qualifier }}</span></span>
           </template>
-          <OpenedScreen :screen="item" :screens="rows" :device="device" :jumps="isMany" :rendering="isOutdated(item)" @move="by => move(item.id, by)">
+          <OpenedScreen :screen="item" :screens="rows" :device="device" :jumps="list.isMany" :rendering="list.isOutdated(item)" :movable="!readOnly" @move="by => list.move(item.id, by)">
             <template #schedule>
-              <ScheduleEditor :screen="item" :reload="reload" />
+              <ScheduleEditor v-if="!readOnly" :screen="item" :reload="reload" />
+              <div v-else class="schedule-read" role="group" :aria-labelledby="`${screenRowId(item.id)}-schedule`">
+                <h4 :id="`${screenRowId(item.id)}-schedule`" class="schedule-heading">
+                  Schedule
+                </h4>
+                <ScheduleSummary :schedule="item.schedule" />
+              </div>
             </template>
             <template #source>
-              <ScreenSource :screen="item" :device="device" :reload="reload" @rerendering="awaitRendering(item)" />
+              <ScreenSourceReadOnly v-if="group" :screen="item" :group="group" />
+              <ScreenSource v-else :screen="item" :image-path="item.imagePath" :rendered-at="item.renderedAt" :renders-as="device" :reload="reload" @rerendering="list.awaitRendering(item)" />
             </template>
-            <template v-if="item.kind !== 'plugin'" #actionsBefore>
-              <Button variant="quiet" :disabled="renaming === item.id" @click="setRenaming(item.id, true)">
+            <template v-if="item.kind !== 'plugin' && !readOnly" #actionsBefore>
+              <Button variant="quiet" :disabled="list.renaming === item.id" @click="list.setRenaming(item.id, true)">
                 Rename
               </Button>
             </template>
             <template #actionsAfter>
-              <ScreenPick :screen="item" :device="device" :reload="reload" />
-              <ScreenRemoval :screen="item" :device="device" @removed="showWithoutRemoved" />
+              <ScreenPick :screen-id="item.id" :device="device" :state="item.state" :picked="item.picked" :reload="reload" />
+              <ScreenRemoval v-if="!readOnly" :screen="item" :owner="{ kind: 'device', id: device.id }" :owner-name="device.name" @removed="showWithoutRemoved" />
             </template>
           </OpenedScreen>
         </ScreenRow>
@@ -214,33 +174,7 @@ const pausedNote = computed(() => sentence(
     margin-top: var(--space-10);
   }
 
-  .heading-line {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: var(--space-2) var(--space-4);
-    padding-bottom: var(--space-2);
-    border-bottom: var(--rule-heavy);
-  }
-
-  .heading {
-    font-stretch: var(--width-title);
-    font-weight: var(--weight-title);
-    font-size: var(--title-sm);
-    line-height: var(--leading-title);
-  }
-
-  .count {
-    margin-left: var(--space-1);
-    color: var(--color-ink-soft);
-    font-family: var(--font-mono);
-    font-stretch: 100%;
-    font-weight: var(--weight-regular);
-    font-size: var(--text-sm);
-  }
-
-  .screens-in-order .paused {
+  .screens-in-order .note {
     padding: var(--space-3) 0;
     border-bottom: var(--rule);
     color: var(--color-ink);
@@ -254,6 +188,17 @@ const pausedNote = computed(() => sentence(
   .qualifier {
     color: var(--color-ink-soft);
     font-weight: var(--weight-regular);
+  }
+
+  .schedule-read {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .schedule-heading {
+    margin: 0;
+    font-weight: var(--weight-semibold);
+    font-size: var(--text-md);
   }
 }
 </style>

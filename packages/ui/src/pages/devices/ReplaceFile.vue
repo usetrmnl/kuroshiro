@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DeviceDetail, ScreenRead } from 'kuroshiro-shared'
+import type { RenderTarget, ScreenBody } from './screenTarget'
 import { nextTick, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from 'vue'
 import { imageUrl } from '@/api/client'
 import { previewScreenImage, replaceScreenImage } from '@/api/screens'
@@ -14,8 +14,11 @@ import InPlaceForm from './InPlaceForm.vue'
 import { screenName } from './screenNaming'
 
 const props = defineProps<{
-  screen: ScreenRead
-  device: DeviceDetail
+  screen: ScreenBody
+  /** The converted image as it is now. */
+  imagePath: string | null
+  /** The Device the preview is converted for; none on a Device Group without a member, where the server converts for its first member once there is one. */
+  rendersAs: RenderTarget | undefined
   /** The largest image this Instance takes, in bytes. */
   maxBytes: number
   /** Reads the Screens again, after the image was replaced. */
@@ -102,9 +105,9 @@ onBeforeUnmount(() => {
         <figure>
           <Plate
             :name="`${screenName(screen.name)}, as it is now`"
-            :src="screen.imagePath && imageUrl(screen.imagePath)"
-            :width="device.deviceModel?.width"
-            :height="device.deviceModel?.height"
+            :src="imagePath && imageUrl(imagePath)"
+            :width="rendersAs?.deviceModel?.width"
+            :height="rendersAs?.deviceModel?.height"
           />
           <figcaption class="caption">
             Now
@@ -112,10 +115,10 @@ onBeforeUnmount(() => {
         </figure>
         <figure>
           <Plate
-            :name="`${chosen.name}, converted for ${device.name}`"
+            :name="`${chosen.name}, converted${rendersAs ? ` for ${rendersAs.name}` : ''}`"
             :src="converted"
-            :width="device.deviceModel?.width"
-            :height="device.deviceModel?.height"
+            :width="rendersAs?.deviceModel?.width"
+            :height="rendersAs?.deviceModel?.height"
           />
           <figcaption class="caption">
             New: {{ chosen.name }}
@@ -141,7 +144,9 @@ onBeforeUnmount(() => {
       <FieldError :message="problem" />
       <ResultLine :running="converting">
         <template v-if="converting && chosen" #default>
-          Converting {{ chosen.name }} for {{ device.name }}
+          Converting {{ chosen.name }}<template v-if="rendersAs">
+            for {{ rendersAs.name }}
+          </template>
         </template>
       </ResultLine>
     </template>

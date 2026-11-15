@@ -105,7 +105,7 @@ describe('the upload limits', () => {
   })
 
   const uploads: { name: string, path: string, method?: string, status?: number, limit: number, fields: Record<string, string>, filename: string }[] = [
-    { name: 'image upload', path: '/api/screens', limit: UPLOAD_LIMITS.imageUploadBytes, fields: { deviceId: DEVICE_ID, kind: 'file', name: 'Photo' }, filename: 'photo.png' },
+    { name: 'image upload', path: '/api/screens', limit: UPLOAD_LIMITS.imageUploadBytes, fields: { 'owner[kind]': 'device', 'owner[id]': DEVICE_ID, 'kind': 'file', 'name': 'Photo' }, filename: 'photo.png' },
     { name: 'image replacement', path: '/api/screens/screen-id/image', method: 'PUT', status: 200, limit: UPLOAD_LIMITS.imageUploadBytes, fields: {}, filename: 'photo.png' },
     { name: 'image preview', path: '/api/screens/screen-id/image-preview', status: 200, limit: UPLOAD_LIMITS.imageUploadBytes, fields: {}, filename: 'photo.png' },
     { name: 'firmware upload', path: '/api/firmware/upload', limit: UPLOAD_LIMITS.firmwareUploadBytes, fields: { version: '1.0.0' }, filename: 'firmware.bin' },

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { DeviceDetail, ScreenRead } from 'kuroshiro-shared'
+import type { ScreenOwner } from 'kuroshiro-shared'
+import type { ScreenBody } from './screenTarget'
 import { computed, ref } from 'vue'
 import { deleteScreen, unassignPlugin } from '@/api/screens'
 import Button from '@/components/Button.vue'
@@ -7,21 +8,23 @@ import Confirmation from '@/components/Confirmation.vue'
 import { removalWording } from './screenSourceWording'
 
 const props = defineProps<{
-  screen: ScreenRead
-  device: DeviceDetail
+  screen: ScreenBody
+  /** The Device or the Device Group the Screen is on. */
+  owner: ScreenOwner
+  ownerName: string
 }>()
 
 defineEmits<{
-  /** The Screen is gone from the Device. */
+  /** The Screen is gone from its owner. */
   removed: []
 }>()
 
 const asking = ref(false)
-const wording = computed(() => removalWording(props.screen, props.device))
+const wording = computed(() => removalWording(props.screen, props.ownerName))
 
 function remove() {
   return props.screen.kind === 'plugin' && props.screen.plugin
-    ? unassignPlugin(props.screen.plugin.id, props.device.id)
+    ? unassignPlugin(props.screen.plugin.id, props.owner)
     : deleteScreen(props.screen.id)
 }
 </script>

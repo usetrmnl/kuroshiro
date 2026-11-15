@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { DeviceDetail } from 'kuroshiro-shared'
 import type { FetchChoice } from './fetchChoices'
+import type { ScreenTarget } from './screenTarget'
 import { computed, reactive } from 'vue'
 import { isRefusal } from '@/api/client'
 import { createScreen } from '@/api/screens'
@@ -17,7 +17,7 @@ import { screenNameProblem } from './screenNaming'
 import { isWebAddress } from './screenSourceWording'
 
 const props = defineProps<{
-  device: DeviceDetail
+  target: ScreenTarget
 }>()
 
 /** An address that answers with something that is no image is worded for an address, where the general wording speaks of a file. */
@@ -40,7 +40,7 @@ function noImage(error: unknown) {
 function add() {
   void addition.create(() => createScreen({
     kind: 'external',
-    deviceId: props.device.id,
+    owner: props.target.owner,
     name: draft.name.trim(),
     url: draft.url.trim(),
     fetchManual: draft.fetching === 'keep',

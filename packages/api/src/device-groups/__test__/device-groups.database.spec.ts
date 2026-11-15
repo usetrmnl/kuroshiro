@@ -125,7 +125,7 @@ describe('device Groups, against a real database', () => {
   }
 
   async function addOwnScreen(device: Device, name: string): Promise<string> {
-    const response = await http.postJson('/api/screens', { deviceId: device.id, kind: 'html', name, html: `<p>${name}</p>` })
+    const response = await http.postJson('/api/screens', { owner: { kind: 'device', id: device.id }, kind: 'html', name, html: `<p>${name}</p>` })
     expect(response.status).toBe(201)
     return (await response.json()).id
   }
@@ -167,7 +167,7 @@ describe('device Groups, against a real database', () => {
       await join(kitchen, group.id)
 
       const detail: DeviceGroupRead = await (await http.request(`/api/device-groups/${group.id}`)).json()
-      expect(detail.members).toEqual([{ id: kitchen.id, name: 'Kitchen', friendlyId: 'KITCHN', deviceModelName: null, paletteName: null }])
+      expect(detail.members).toEqual([{ id: kitchen.id, name: 'Kitchen', friendlyId: 'KITCHN', deviceModel: null, palette: null }])
 
       const renamed = await http.request(`/api/device-groups/${group.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Upstairs' }) })
       expect(await renamed.json()).toMatchObject({ name: 'Upstairs' })
@@ -185,12 +185,11 @@ describe('device Groups, against a real database', () => {
       expect(screens.map(screen => [screen.filename, screen.order, screen.device])).toEqual([['First', 1, null], ['Second', 2, null]])
     })
 
-    it('still takes the legacy deviceId as the Device owner', async () => {
-      await addOwnScreen(kitchen, 'Mine')
+    it('refuses a body that names no owner with 400, a bare deviceId included', async () => {
+      const response = await http.postJson('/api/screens', { deviceId: kitchen.id, kind: 'html', name: 'Mine', html: '<p/>' })
 
-      const screen = await database.getRepository(Screen).findOneOrFail({ where: { filename: 'Mine' }, relations: { device: true, deviceGroup: true } })
-      expect(screen.device?.id).toBe(kitchen.id)
-      expect(screen.deviceGroup).toBeNull()
+      expect(response.status).toBe(400)
+      expect(await database.getRepository(Screen).countBy({ filename: 'Mine' })).toBe(0)
     })
 
     it('refuses a Group that does not exist with 404', async () => {
@@ -279,6 +278,21 @@ describe('device Groups, against a real database', () => {
       expect(screens.every(screen => screen.perDevice.length === 2)).toBe(true)
     })
 
+    it('names each member\'s rendered image on a Group Screen, and none for a member whose image is not on disk', async () => {
+      const group = await createGroup()
+      const only = await addGroupScreen(group.id, 'Only')
+      await join(kitchen, group.id)
+      await join(hall, group.id)
+      await poll(kitchen)
+      await writeFile(screenImagePath(kitchen.id, only), 'image')
+
+      const [screen] = await groupScreens(group.id)
+
+      const byDevice = Object.fromEntries(screen.perDevice.map(state => [state.deviceId, state]))
+      expect(byDevice[kitchen.id]).toMatchObject({ imagePath: expect.stringMatching(new RegExp(`^/screens/devices/${kitchen.id}/${only}\\.png\\?v=\\d+$`)), renderedAt: expect.any(String) })
+      expect(byDevice[hall.id]).toMatchObject({ imagePath: null, renderedAt: null })
+    })
+
     it('puts a member that has not met a Screen yet in the list without a record', async () => {
       const group = await createGroup()
       const only = await addGroupScreen(group.id, 'Only')
@@ -289,6 +303,34 @@ describe('device Groups, against a real database', () => {
       expect(screen.id).toBe(only)
       expect(screen.perDevice).toEqual([expect.objectContaining({ deviceId: kitchen.id, isActive: false, generatedAt: null })])
       expect(await database.getRepository(DeviceScreen).countBy({ screen: { id: only } })).toBe(0)
+    })
+  })
+
+  describe('a member\'s own Screens', () => {
+    it('lists them parked under /screens/own, with no Screen State, while /screens lists the Group\'s', async () => {
+      const group = await createGroup()
+      await addGroupScreen(group.id, 'Shared')
+      await addOwnScreen(kitchen, 'Own 1')
+      await addOwnScreen(kitchen, 'Own 2')
+      await poll(kitchen)
+      await join(kitchen, group.id)
+
+      const own: ScreenRead[] = await (await http.request(`/api/devices/${kitchen.id}/screens/own`)).json()
+      const shown: ScreenRead[] = await (await http.request(`/api/devices/${kitchen.id}/screens`)).json()
+
+      expect(own.map(screen => [screen.name, screen.order, screen.state, screen.readOnly, screen.deviceId])).toEqual([['Own 1', 1, null, false, kitchen.id], ['Own 2', 2, null, false, kitchen.id]])
+      expect(shown.map(screen => screen.name)).toEqual(['Shared'])
+    })
+
+    it('answers the same Screens as /screens for a Device in no Group, and 404 for an unknown Device', async () => {
+      await addOwnScreen(kitchen, 'Own 1')
+      await poll(kitchen)
+
+      const own: ScreenRead[] = await (await http.request(`/api/devices/${kitchen.id}/screens/own`)).json()
+
+      expect(own).toEqual(await (await http.request(`/api/devices/${kitchen.id}/screens`)).json())
+      expect(own[0]!.state).toBe('active')
+      expect((await http.request(`/api/devices/${UNKNOWN_ID}/screens/own`)).status).toBe(404)
     })
   })
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DeviceDetail, ScreenRead } from 'kuroshiro-shared'
+import type { RenderTarget, ScreenBody } from './screenTarget'
 import { useId } from 'vue'
 import { SCREEN_KIND_LABELS } from '@/components/screenRows'
 import ExternalScreenSource from './ExternalScreenSource.vue'
@@ -9,8 +9,12 @@ import MashupScreenSource from './MashupScreenSource.vue'
 import PluginScreenSource from './PluginScreenSource.vue'
 
 defineProps<{
-  screen: ScreenRead
-  device: DeviceDetail
+  screen: ScreenBody
+  /** The Screen's image and when it was last rendered or fetched, for the Device that reads it. */
+  imagePath: string | null
+  renderedAt: string | null
+  /** The Device the Screen's image is converted for; none on a Device Group without a member. */
+  rendersAs: RenderTarget | undefined
   /** Reads the Screens again, after a write to this one. */
   reload: () => Promise<void>
 }>()
@@ -28,10 +32,10 @@ const headingId = useId()
     <h4 :id="headingId" class="kind">
       {{ SCREEN_KIND_LABELS[screen.kind] }}
     </h4>
-    <PluginScreenSource v-if="screen.plugin" :plugin="screen.plugin" :rendered-at="screen.renderedAt" />
+    <PluginScreenSource v-if="screen.plugin" :plugin="screen.plugin" :rendered-at="renderedAt" />
     <MashupScreenSource v-else-if="screen.kind === 'mashup'" :screen="screen" :mashup="screen.mashup" :reload="reload" @changed="$emit('rerendering')" />
-    <FileScreenSource v-else-if="screen.file" :screen="screen" :file="screen.file" :device="device" :reload="reload" />
-    <ExternalScreenSource v-else-if="screen.external" :screen="screen" :external="screen.external" :reload="reload" />
+    <FileScreenSource v-else-if="screen.file" :screen="screen" :file="screen.file" :image-path="imagePath" :renders-as="rendersAs" :reload="reload" />
+    <ExternalScreenSource v-else-if="screen.external" :screen="screen" :external="screen.external" :rendered-at="renderedAt" :reload="reload" />
     <HtmlScreenSource v-else-if="screen.kind === 'html'" :screen="screen" />
   </div>
 </template>

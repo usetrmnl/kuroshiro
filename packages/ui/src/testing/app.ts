@@ -1,4 +1,4 @@
-import type { AlertsList, DeviceSummary, InstanceFacts } from 'kuroshiro-shared'
+import type { AlertsList, DeviceGroupSummary, DeviceSummary, InstanceFacts } from 'kuroshiro-shared'
 import type { RouteRecordRaw } from 'vue-router'
 import type { Theme } from './theme'
 import { http, HttpResponse } from 'msw'
@@ -17,21 +17,25 @@ interface ShellReads {
   instance?: InstanceFacts
   devices?: DeviceSummary[]
   alerts?: AlertsList
+  /** What the Devices list, where the shell lands, shows under the Devices. */
+  groups?: DeviceGroupSummary[]
 }
 
 /**
- * Fakes the three reads the shell makes on every page. Left out, the Instance is an
- * ordinary one with one Device, Kitchen, and no Alert firing.
+ * Fakes the three reads the shell makes on every page, and the Device Groups the Devices list reads. Left out, the Instance is an
+ * ordinary one with one Device, Kitchen, no Device Group and no Alert firing.
  */
 export function fakeShellReads({
   instance = buildInstanceFacts(),
   devices = [buildDeviceSummary()],
   alerts = buildAlertsList(),
+  groups = [],
 }: ShellReads = {}) {
   api.use(
     http.get(apiUrl('instance'), () => HttpResponse.json(instance)),
     http.get(apiUrl('devices'), () => HttpResponse.json(devices)),
     http.get(apiUrl('alerts'), () => HttpResponse.json(alerts)),
+    http.get(apiUrl('device-groups'), () => HttpResponse.json(groups)),
   )
 }
 

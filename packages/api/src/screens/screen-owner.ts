@@ -22,10 +22,3 @@ export function ownerOfScreen(screen: Pick<Screen, 'device' | 'deviceGroup'>): S
 export function shownOwnerOf(device: Pick<Device, 'id' | 'deviceGroup'>): ScreenOwner {
   return device.deviceGroup ? { kind: 'deviceGroup', id: device.deviceGroup.id } : { kind: 'device', id: device.id }
 }
-
-/** The `owner` of a request body, or the Device owner that the deprecated `deviceId` names. */
-export function ownerOfRequest(body: { owner?: ScreenOwner, deviceId?: string }): ScreenOwner | null {
-  if (body.owner)
-    return body.owner
-  return body.deviceId ? { kind: 'device', id: body.deviceId } : null
-}

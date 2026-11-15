@@ -1,5 +1,58 @@
 {
   "kind": "health",
+  "finding_counts": {
+    "packages/ui/src/pages/devices/GroupOpenedScreen.vue": {
+      "complexity_moderate": {
+        "count": 1
+      },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "packages/ui/src/pages/devices/GroupScreensInOrder.vue": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "packages/ui/src/pages/devices/ScreensInOrder.vue": {
+      "complexity_high": {
+        "count": 1
+      }
+    }
+  },
+  "identity_finding_counts": {
+    "packages/ui/src/pages/devices/GroupOpenedScreen.vue\u0000<arrow>": {
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "packages/ui/src/pages/devices/GroupOpenedScreen.vue\u0000<template>": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "packages/ui/src/pages/devices/GroupScreensInOrder.vue\u0000<template>": {
+      "complexity_moderate": {
+        "count": 1
+      }
+    },
+    "packages/ui/src/pages/devices/ScreensInOrder.vue\u0000<template>": {
+      "complexity_high": {
+        "count": 1
+      }
+    }
+  },
   "runtime_coverage_findings": [],
-  "target_keys": []
+  "target_keys": [
+    "packages/api/src/screens/screen-reads.service.ts:high impact",
+    "packages/api/src/config/typeorm.config.ts:hidden coupling",
+    "packages/api/src/plugins/services/plugin-assignments.service.ts:high impact",
+    "packages/ui/src/pages/devices/screenSourceWording.ts:high impact",
+    "packages/ui/src/pages/devices/deviceGroups.ts:high impact",
+    "packages/api/src/plugins/plugin-oauth.ts:high impact",
+    "packages/api/src/settings/instance-settings.service.ts:hidden coupling",
+    "packages/ui/src/components/ScreenRows.vue:high impact",
+    "packages/ui/src/components/codeCompletion.ts:high impact",
+    "packages/api/src/app.module.ts:hidden coupling"
+  ]
 }

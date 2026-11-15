@@ -73,7 +73,7 @@ export class ScreenReadsService {
 
     const screens = await this.screenRepository.find({ where: { deviceGroup: { id: groupId } }, relations: this.screenRelations, order: { order: 'ASC' } })
     const members = await this.deviceRepository.find({ where: { deviceGroup: { id: groupId } }, order: { name: 'ASC' } })
-    const { storedFieldValues, pluginsWithFetchAlert } = await this.facts(screens, [])
+    const { renderedIds, storedFieldValues, pluginsWithFetchAlert } = await this.facts(screens, members.map(member => member.id))
 
     const now = new Date()
     const memberRecords = await Promise.all(members.map(async (member) => {
@@ -96,9 +96,38 @@ export class ScreenReadsService {
           isActive: record?.isActive ?? false,
           renderSignal: record ? renderSignalOf(record) : null,
           generatedAt: record?.id ? record.generatedAt : null,
+          isRendered: renderedIds.has(`${member.id}/${screen.id}`),
         }
       }),
     ))
+  }
+
+  /** A Device's own Screens in Order, which it shows unless it is in a Device Group: then they are parked, and none has a Screen State. */
+  async ownOf(deviceId: string): Promise<ScreenRead[]> {
+    const device = isUUID(deviceId) ? await this.deviceRepository.findOneBy({ id: deviceId }) : null
+    if (!device)
+      throw new ApiException(HttpStatus.NOT_FOUND, 'device-not-found', 'Device not found', { id: deviceId })
+    if (!device.deviceGroup)
+      return this.forDevice(deviceId)
+
+    const records = await this.deviceScreenRepository.find({
+      where: { device: { id: deviceId }, screen: { device: { id: deviceId } } },
+      relations: { screen: this.screenRelations },
+      order: { screen: { order: 'ASC' } },
+    })
+    const screens = records.map(record => record.screen)
+    const { renderedIds, storedFieldValues, pluginsWithFetchAlert } = await this.facts(screens, [deviceId])
+
+    return records.map(record => toScreenRead(record.screen, {
+      deviceId,
+      readOnly: false,
+      state: { state: null, stateCause: null, picked: false },
+      renderSignal: renderSignalOf(record),
+      generatedAt: record.generatedAt,
+      isRendered: renderedIds.has(`${deviceId}/${record.screen.id}`),
+      requiredFieldEmpty: !!record.screen.plugin && needsValues(record.screen.plugin.fields ?? [], storedFieldValues.get(record.screen.plugin.id) ?? {}),
+      fetchAlertFiring: !!record.screen.plugin && pluginsWithFetchAlert.has(record.screen.plugin.id),
+    }))
   }
 
   /** One Screen: with its Device's state among that Device's Screens, or, for a Device Group's Screen, every member's. */

@@ -60,6 +60,36 @@ async function mountWithOpened(screenId: string, name: string) {
   await expect.poll(() => [...document.images].every(image => image.complete)).toBe(true)
 }
 
+const GROUP = { id: 'downstairs', name: 'Downstairs' }
+
+/** Kitchen in Downstairs: the Group's three Screens with Kitchen's state, and its own two parked. */
+const groupedDevice = buildDeviceDetail({ ...device, screenCount: 2, deviceGroup: GROUP })
+const shownFromGroup = screens.slice(0, 3).map(screen => ({ ...screen, readOnly: true }))
+const parked = [
+  buildScreen({ id: 'bins', deviceId: 'kitchen', name: 'Bin day', order: 1, state: null, imagePath: imagePath('bins') }),
+  buildScreen({ id: 'notes', deviceId: 'kitchen', name: 'Notes', order: 2, kind: 'html', plugin: null, state: null, imagePath: imagePath('notes'), html: '<h1>Notes</h1>' }),
+]
+
+describe('the Screens view of a Device in a Device Group', () => {
+  it('with the Group\'s Screens read-only, the File Screen opened, and the own Screens parked and opened', async () => {
+    freezeTime('2026-10-03T07:35:00.000Z')
+    fakeScreenImages()
+    fakeShellReads({ devices: [buildDeviceSummary({ id: 'kitchen', name: 'Kitchen', deviceGroup: GROUP })] })
+    api.use(
+      http.get(apiUrl('devices/kitchen'), () => HttpResponse.json(groupedDevice)),
+      http.get(apiUrl('devices/kitchen/screens'), () => HttpResponse.json(shownFromGroup)),
+      http.get(apiUrl('devices/kitchen/screens/own'), () => HttpResponse.json(parked)),
+    )
+    const screen = await mountApp({ at: '/devices/kitchen?screen=photo#own-screens' })
+    await expect.element(screen.getByRole('img', { name: 'On Kitchen: Calendar' })).toBeVisible()
+    await expect.element(screen.getByRole('img', { name: 'Harbour photo, as rendered for Kitchen' })).toBeVisible()
+    await expect.element(screen.getByRole('main').getByRole('button', { name: 'Bin day' })).toBeVisible()
+    await expect.poll(() => [...document.images].every(image => image.complete)).toBe(true)
+
+    await expectPageScreenshots('device-screens-grouped')
+  })
+})
+
 describe('the Screens view of a Device', () => {
   it('with an Active Screen, a File Screen opened and the low-battery Alert firing', async () => {
     await mountWithOpened('photo', 'Harbour photo')
