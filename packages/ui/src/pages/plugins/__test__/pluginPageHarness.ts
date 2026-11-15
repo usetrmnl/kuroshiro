@@ -15,6 +15,9 @@ import { holdTabVisible } from '@/testing/visibility'
 
 /** What the specs of the Plugin page and of its sections share: the faked Plugin, the mounted page and the save bar. */
 
+/** The Framework versions the faked API says TRMNL has released, newest first; the Instance's own is `TRMNL_FRAMEWORK_VERSION`. */
+export const RELEASED_VERSIONS = ['3.5.0', '3.4.6', '3.3.1']
+
 export const WEATHER = buildPluginDetail({ id: 'weather', name: 'Weather' })
 
 /** A faked export's answer: a small `Blob` under `filename`, as the server names it in `Content-Disposition`. */
@@ -113,6 +116,7 @@ export function fakePlugin(plugin: PluginDetail = WEATHER, answer = withScalarsS
   fakePreviewLibrary()
   api.use(
     http.get(apiUrl('settings'), () => HttpResponse.json(buildInstanceSettings())),
+    http.get(apiUrl('framework-versions'), () => HttpResponse.json(RELEASED_VERSIONS)),
     http.get(apiUrl(`plugins/${plugin.id}`), () => HttpResponse.json(faked.plugin)),
     http.patch(apiUrl(`plugins/${plugin.id}`), async ({ request }) => {
       const input = await request.json() as UpdatePluginInput

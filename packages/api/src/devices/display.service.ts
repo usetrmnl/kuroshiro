@@ -851,9 +851,8 @@ export class DeviceDisplayService {
 
   /**
    * Rendered as a scheduler tick renders each Screen (ADR-0069): told the
-   * Device as `trmnl.device`, with `sensors` left `[]` like the tick, the
-   * save-triggered refresh and a Webhook ingest, so the output cached here
-   * reads no differently from the one the next tick writes.
+   * Device as `trmnl.device`, with the Device's current Sensors as the tick lays them, so the output
+   * cached here reads no differently from the one the next tick writes.
    */
   private async renderPluginHtml(plugin: Plugin, screen: Screen, device: Device): Promise<string | null> {
     this.logger.log(`No cache, rendering plugin ${plugin.id} on-demand for screen ${screen.id}`)
@@ -862,7 +861,8 @@ export class DeviceDisplayService {
     if (!fullTemplate)
       return null
 
-    const { context } = await this.pluginTemplateContext.contextFor(plugin, [])
+    const sensors = await this.deviceSensors.findForDevice(device.id)
+    const { context } = await this.pluginTemplateContext.contextFor(plugin, sensors)
 
     const renderedHtml = await this.pluginRenderer.render(fullTemplate.liquidMarkup, await withTrmnlDevice(context, device, this.deviceModels))
     await this.screenRender.cachePluginOutput(screen, renderedHtml)

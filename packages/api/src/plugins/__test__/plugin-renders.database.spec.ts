@@ -97,7 +97,8 @@ describe('what a Plugin renders from, and with which Template, against a real da
     const fallbackScreens = createMockFallbackScreensService()
     primeMockDeviceModelsServiceWithAssignedModels(deviceModels)
     primeMockFallbackScreensService(fallbackScreens)
-    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(deviceModels))
+    deviceSensors = new DeviceSensorsService(database.getRepository(DeviceSensor))
+    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(deviceModels), deviceSensors)
     const refresh = new PluginRefreshService(renderCache, templateContext, new DataSourceFetchOutcomeService(database.getRepository(PluginDataSource)), new PluginDataSourceStateService(database.getRepository(PluginDataSource)), database.getRepository(Plugin))
     scheduler = new PluginSchedulerService(refresh)
     assignments = new PluginAssignmentsService(database.getRepository(Plugin), database.getRepository(Device), database.getRepository(DevicePlugin))
@@ -114,7 +115,6 @@ describe('what a Plugin renders from, and with which Template, against a real da
     )
     webhookIngest = new WebhookIngestService(database.getRepository(Plugin), refresh)
 
-    deviceSensors = new DeviceSensorsService(database.getRepository(DeviceSensor))
     mashupRenderer = new MashupRendererService(renderer, deviceSensors, templateContext, asService<DeviceModelsService>(deviceModels))
     const screenRender = new ScreenRenderService(
       database.getRepository(Screen),
@@ -242,7 +242,7 @@ describe('what a Plugin renders from, and with which Template, against a real da
   }
 
   describe('one context for every render', () => {
-    it('gives the scheduler tick and the on-demand render the same Sensor-less context, told the Device, a Mashup slot and the preview keep the polling Device\'s own Sensors for', async () => {
+    it('gives the scheduler tick, the on-demand render, a Mashup slot and the preview the same context, told the Device and laid with its own Sensors', async () => {
       vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-01T10:00:00.000Z') })
       const plugin = await createPollPlugin({ fields: [{ keyname: 'city', name: 'City' }], fieldValues: { city: 'Berlin' } })
       const device = await addDevice('Kitchen')
@@ -273,14 +273,11 @@ describe('what a Plugin renders from, and with which Template, against a real da
           device: { friendly_id: device.friendlyId, width: 800, height: 480, model: 'og_plus', bit_depth: 2, orientation: 'landscape', refresh_interval_seconds: 300, sleep_mode_enabled: false },
         },
       }
-      // A Mashup slot and the device-scoped preview are each rendered for one specific
-      // Device and stored (or returned) only for that Device, so they keep its Sensors
-      // — unlike the Plugin's own Screen, whose cache is written by a tick that fetched for every Screen at once (#1121).
       const deviceScopedExpected = { ...sharedRenderExpected, sensors: { temperature: { value: 21.5, unit: 'C' } } }
-      expect(onDemand).toEqual(sharedRenderExpected)
+      expect(onDemand).toEqual(deviceScopedExpected)
       expect(mashupSlot).toEqual(deviceScopedExpected)
       expect(preview.context).toEqual(deviceScopedExpected)
-      expect(tick).toEqual(sharedRenderExpected)
+      expect(tick).toEqual(deviceScopedExpected)
     })
 
     it('reads a list Field Value as a list on the on-demand render and in a Mashup slot, as the preview does (ADR-0064)', async () => {
