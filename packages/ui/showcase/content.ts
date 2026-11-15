@@ -97,6 +97,12 @@ export const HALLWAY_HTML = `<div class="layout layout--col layout--center gap--
 </div>
 ${titleBar('Before you leave', 'Hallway')}`
 
+export const LOBBY_HTML = `<div class="layout layout--col layout--center gap--large">
+  <span class="value value--xlarge">Welcome</span>
+  <span class="description">Reception is on the first floor · coffee in the foyer</span>
+</div>
+${titleBar('Welcome', 'Lobby')}`
+
 export const WEATHER_FORECAST = {
   location: 'Hamburg',
   now: { temperature: 14, feels_like: 12, summary: 'Light rain from 15:00', wind: 18, humidity: 81 },
