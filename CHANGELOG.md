@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.25.0](https://github.com/usetrmnl/kuroshiro/compare/kuroshiro-v0.24.0...kuroshiro-v0.25.0) (2026-11-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* **ui:** a bare deviceId no longer names the owner of a new Screen; send owner: { kind, id }. DeviceGroupMember.deviceModelName and paletteName are now deviceModel and palette.
+* **api:** Device Groups own a Screen set their members each walk at their own pace ([#1798](https://github.com/usetrmnl/kuroshiro/issues/1798))
+
+### Features
+
+* **api:** a Plugin Screen reads its own Device's Sensors ([#1787](https://github.com/usetrmnl/kuroshiro/issues/1787)) ([aa921be](https://github.com/usetrmnl/kuroshiro/commit/aa921bea091fb07707ca5a35dca58b65349ee47c))
+* **api:** Device Groups own a Screen set their members each walk at their own pace ([#1798](https://github.com/usetrmnl/kuroshiro/issues/1798)) ([7b77072](https://github.com/usetrmnl/kuroshiro/commit/7b770727ff3334c9d84f8cf023cb43a460df57ec)), closes [#1793](https://github.com/usetrmnl/kuroshiro/issues/1793)
+* **api:** dither image-dither elements on an undithered Screen ([#1788](https://github.com/usetrmnl/kuroshiro/issues/1788)) ([9541366](https://github.com/usetrmnl/kuroshiro/commit/9541366a8fb694330047f8bb409e036d6b6f6c9e))
+* list TRMNL's released Framework versions in the Plugin's field ([#1790](https://github.com/usetrmnl/kuroshiro/issues/1790)) ([bf7a8fa](https://github.com/usetrmnl/kuroshiro/commit/bf7a8faa83b53644c9be875e4b59f3fe22ddc470))
+* **ui:** Device Groups list and page, and a grouped Device shows its Group's Screens ([#1799](https://github.com/usetrmnl/kuroshiro/issues/1799)) ([920421e](https://github.com/usetrmnl/kuroshiro/commit/920421e8354d3b3b30135a1f87065370e6dc8bed))
+* **ui:** show when an active Alert was last reminded ([#1789](https://github.com/usetrmnl/kuroshiro/issues/1789)) ([4c1f8e6](https://github.com/usetrmnl/kuroshiro/commit/4c1f8e6a3f3a11ea23bb730d9d430a7e2b9c3edf))
+
+
+### Performance Improvements
+
+* **ci:** cache the image layers both Docker builds share ([#1780](https://github.com/usetrmnl/kuroshiro/issues/1780)) ([893de9f](https://github.com/usetrmnl/kuroshiro/commit/893de9f4c69e30fa857a50256c3ea836e1d14c62))
+
 ## [0.24.0](https://github.com/usetrmnl/kuroshiro/compare/kuroshiro-v0.23.1...kuroshiro-v0.24.0) (2026-11-14)
 
 
