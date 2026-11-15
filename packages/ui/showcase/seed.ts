@@ -12,6 +12,7 @@ import {
   ENERGY_PAYLOAD,
   ENERGY_TEMPLATES,
   HALLWAY_HTML,
+  LOBBY_HTML,
   MORNING_BRIEFING_HTML,
   OFFICE_HTML,
   QUOTE,
@@ -142,6 +143,23 @@ export async function seedHallway(api: InstanceApi, baseUrl: string, plugins: Sh
   await api.assignPlugin(plugins.weather.id, hallway.id)
   await pollTimes(hallway, 5)
   return hallway
+}
+
+/** Two Devices of different Device Models in one Device Group, which shows them the same Screens, each at its own pace. */
+export async function seedLobby(api: InstanceApi, baseUrl: string, plugins: ShowcasePlugins, fjord: Uint8Array) {
+  const entrance = await connectNamed(api, baseUrl, 'Entrance', 'A4:C1:38:2B:91:05', 'og', { 'battery-voltage': '4.05', 'rssi': '-58' })
+  const reception = await connectNamed(api, baseUrl, 'Reception', 'A4:C1:38:2B:91:06', 'x', { 'battery-voltage': '4.01', 'rssi': '-61' })
+  const group = await api.createDeviceGroup('Lobby displays')
+  const owner = { kind: 'deviceGroup' as const, id: group.id }
+  await api.addFileScreen(owner, 'Fjord at dawn', fjord)
+  await api.assignPlugin(plugins.weather.id, owner)
+  await api.addHtmlScreen(owner, 'Welcome', LOBBY_HTML)
+  await api.updateDevice(entrance.id, { deviceGroupId: group.id })
+  await api.updateDevice(reception.id, { deviceGroupId: group.id })
+  // The members meet the Screens at their own pace: the Entrance is one step ahead.
+  await pollTimes(reception, 1)
+  await pollTimes(entrance, 2)
+  return group
 }
 
 const MINUTE = 60
