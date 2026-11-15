@@ -1,4 +1,4 @@
-import type { DeviceDetail, DeviceModelRead, FirmwareRead, PaletteRead, UpdateDeviceInput } from 'kuroshiro-shared'
+import type { DeviceDetail, DeviceGroupSummary, DeviceModelRead, FirmwareRead, PaletteRead, UpdateDeviceInput } from 'kuroshiro-shared'
 import type { SelectOption } from '@/components/selectOption'
 import { MAC_ADDRESS_PATTERN, REFRESH_RATE_MAX, REFRESH_RATE_MIN } from 'kuroshiro-shared'
 import { nextPollTime } from './currentScreenStory'
@@ -117,5 +117,6 @@ export interface SettingsReference {
   models: DeviceModelRead[]
   palettes: PaletteRead[]
   firmware: FirmwareRead[]
+  groups: DeviceGroupSummary[]
   firmwareAutoUpdate: boolean
 }

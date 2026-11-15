@@ -1,4 +1,5 @@
-import type { RenderSignal, ScreenRead, ScreenState, ScreenStateCause } from './screens.ts'
+import type { DeviceDetail, DeviceModelReference } from './devices.ts'
+import type { RenderSignal, ScreenBody, ScreenState, ScreenStateCause } from './screens.ts'
 
 export interface DeviceGroupSummary {
   id: string
@@ -11,8 +12,11 @@ export interface DeviceGroupMember {
   id: string
   name: string
   friendlyId: string
-  deviceModelName: string | null
-  paletteName: string | null
+  deviceModel: DeviceModelReference | null
+  palette: DeviceDetail['palette']
+  /** A mirrored or Proxied member has no Rotation to pick in. */
+  isMirrored: boolean
+  isProxied: boolean
 }
 
 export interface DeviceGroup {
@@ -41,10 +45,13 @@ export interface GroupScreenDeviceState {
   renderSignal: RenderSignal | null
   /** When the member's record of the Screen was last rendered or converted; `null` before the member's first contact. */
   generatedAt: string | null
+  /** The Screen as rendered for this member; `null` until it has been. */
+  imagePath: string | null
+  renderedAt: string | null
 }
 
-/** A Screen of a Device Group: the Screen read model without any one Device's state, plus every member's. */
-export interface GroupScreen extends Omit<ScreenRead, 'deviceId' | 'readOnly' | 'state' | 'stateCause' | 'picked' | 'renderSignal' | 'imagePath' | 'renderedAt'> {
+/** A Screen of a Device Group: the Screen's body plus every member's state. */
+export interface GroupScreen extends ScreenBody {
   deviceGroupId: string
   perDevice: GroupScreenDeviceState[]
 }

@@ -5,6 +5,7 @@ import LoadingLine from '@/patterns/LoadingLine.vue'
 import WashBar from '@/patterns/WashBar.vue'
 import HeroColumns from './HeroColumns.vue'
 import { possessive } from './screenNaming'
+import ScreenRowsSkeleton from './ScreenRowsSkeleton.vue'
 
 defineProps<{
   deviceName: string
@@ -15,7 +16,6 @@ defineProps<{
 }>()
 
 const FACT_WIDTHS = ['60%', '40%', '52%', '46%']
-const ROW_WIDTHS = ['38%', '30%', '44%']
 </script>
 
 <template>
@@ -40,15 +40,7 @@ const ROW_WIDTHS = ['38%', '30%', '44%']
       </div>
     </div>
   </HeroColumns>
-  <div v-if="waiting" class="rows" aria-hidden="true">
-    <p class="heading">
-      Screens in Order
-    </p>
-    <div v-for="width in ROW_WIDTHS" :key="width" class="row">
-      <Plate size="row" name="A Screen" :width="deviceModel?.width" :height="deviceModel?.height" rendering />
-      <WashBar :width="width" />
-    </div>
-  </div>
+  <ScreenRowsSkeleton v-if="waiting" :device-model="deviceModel" />
 </template>
 
 <style scoped>
@@ -61,34 +53,6 @@ const ROW_WIDTHS = ['38%', '30%', '44%']
   .fact {
     padding: var(--space-3) 0;
     border-bottom: var(--rule);
-  }
-
-  .rows {
-    margin-top: var(--space-10);
-  }
-
-  .heading {
-    padding-bottom: var(--space-2);
-    border-bottom: var(--rule-heavy);
-    font-stretch: var(--width-title);
-    font-weight: var(--weight-title);
-    font-size: var(--title-sm);
-    line-height: var(--leading-title);
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    min-height: var(--hit-target);
-    padding: var(--space-2) 0 var(--space-2) calc(1rem + 1.25rem + 2 * var(--space-3));
-    border-bottom: var(--rule);
-  }
-
-  @media (max-width: 820px) {
-    .row {
-      padding-left: 0;
-    }
   }
 }
 </style>

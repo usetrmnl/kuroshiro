@@ -8,5 +8,3 @@ export const deviceSettingsPath = (deviceId: string) => `${devicePath(deviceId)}
 export const deviceLogsPath = (deviceId: string) => `${devicePath(deviceId)}/logs`
 
 export const addScreenPath = (deviceId: string) => `${devicePath(deviceId)}/screens/new`
-
-export const editHtmlPath = (deviceId: string, screenId: string) => `${devicePath(deviceId)}/screens/${screenId}/html`

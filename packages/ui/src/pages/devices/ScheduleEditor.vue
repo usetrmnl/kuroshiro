@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ScreenRead } from 'kuroshiro-shared'
+import type { ScreenBody } from 'kuroshiro-shared'
 import { nextTick, ref, useId, useTemplateRef } from 'vue'
 import { createSchedule } from '@/api/screens'
 import Button from '@/components/Button.vue'
@@ -12,7 +12,7 @@ import ScheduleSwitch from './ScheduleSwitch.vue'
 
 const props = defineProps<{
   /** The Screen, under the name the admin reads it by. */
-  screen: ScreenRead
+  screen: Pick<ScreenBody, 'id' | 'name' | 'schedule'>
   /** Reads the Screens again, after a write to this one. */
   reload: () => Promise<void>
 }>()

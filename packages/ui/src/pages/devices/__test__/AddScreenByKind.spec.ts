@@ -52,7 +52,7 @@ describe('add Screen, by kind', () => {
       await addScreen(screen).click()
 
       await expect.poll(() => path(screen)).toBe(OPENED_ON_THE_NEW_SCREEN)
-      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'external', deviceId: 'kitchen', name: 'Tide table', url: 'https://tides.example/today.png', fetchManual: true, dither: true } }])
+      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'external', owner: { kind: 'device', id: 'kitchen' }, name: 'Tide table', url: 'https://tides.example/today.png', fetchManual: true, dither: true } }])
       await openedRow(screen, 'Tide table')
     })
 
@@ -79,7 +79,7 @@ describe('add Screen, by kind', () => {
       await addScreen(screen).click()
 
       await expect.poll(() => path(screen)).toBe(OPENED_ON_THE_NEW_SCREEN)
-      expect(faked.writes[0]?.body).toEqual({ kind: 'external', deviceId: 'kitchen', name: 'Harbour webcam', url: 'http://harbour.local/cam.jpg', fetchManual: false, dither: true })
+      expect(faked.writes[0]?.body).toEqual({ kind: 'external', owner: { kind: 'device', id: 'kitchen' }, name: 'Harbour webcam', url: 'http://harbour.local/cam.jpg', fetchManual: false, dither: true })
     })
 
     it('sends nothing without a name or with an address that is not a web address', async () => {
@@ -153,7 +153,7 @@ describe('add Screen, by kind', () => {
       await addScreen(screen).click()
 
       await expect.poll(() => path(screen)).toBe(OPENED_ON_THE_NEW_SCREEN)
-      expect(faked.writes).toEqual([{ method: 'POST', path: 'mashup', body: { deviceId: 'kitchen', name: 'Weekend board', layout: '1Lx2R', pluginIds: ['weather', 'calendar', 'bins'] } }])
+      expect(faked.writes).toEqual([{ method: 'POST', path: 'mashup', body: { owner: { kind: 'device', id: 'kitchen' }, name: 'Weekend board', layout: '1Lx2R', pluginIds: ['weather', 'calendar', 'bins'] } }])
       await openedRow(screen, 'Weekend board')
     })
 
@@ -222,7 +222,7 @@ describe('add Screen, by kind', () => {
       await addScreen(screen).click()
 
       await expect.poll(() => path(screen)).toBe(OPENED_ON_THE_NEW_SCREEN)
-      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'file', deviceId: 'kitchen', name: 'Harbour photo', file: 'harbour.png', dither: 'true' } }])
+      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { 'kind': 'file', 'owner[kind]': 'device', 'owner[id]': 'kitchen', 'name': 'Harbour photo', 'file': 'harbour.png', 'dither': 'true' } }])
       await openedRow(screen, 'Harbour photo')
     })
 
@@ -299,7 +299,7 @@ describe('add Screen, by kind', () => {
       await addScreen(screen).click()
 
       await expect.poll(() => path(screen)).toBe(OPENED_ON_THE_NEW_SCREEN)
-      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'html', deviceId: 'kitchen', name: 'Fridge note', html: 'Milk, eggs\n', dither: true } }])
+      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'html', owner: { kind: 'device', id: 'kitchen' }, name: 'Fridge note', html: 'Milk, eggs\n', dither: true } }])
       await openedRow(screen, 'Fridge note')
     })
 
@@ -315,7 +315,7 @@ describe('add Screen, by kind', () => {
       await addScreen(screen).click()
 
       await expect.poll(() => path(screen)).toBe(OPENED_ON_THE_NEW_SCREEN)
-      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'html', deviceId: 'kitchen', name: 'Fridge note', html: 'Milk', dither: false } }])
+      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'html', owner: { kind: 'device', id: 'kitchen' }, name: 'Fridge note', html: 'Milk', dither: false } }])
     })
 
     it('previews the markup as it is typed, in the screen shell of the Device\'s Device Model and Palette', async () => {
@@ -343,7 +343,7 @@ describe('add Screen, by kind', () => {
       await userEvent.keyboard('{Control>}s{/Control}')
 
       await expect.poll(() => path(screen)).toBe(OPENED_ON_THE_NEW_SCREEN)
-      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'html', deviceId: 'kitchen', name: 'Fridge note', html: 'Milk', dither: true } }])
+      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'html', owner: { kind: 'device', id: 'kitchen' }, name: 'Fridge note', html: 'Milk', dither: true } }])
     })
 
     it('adds one Screen when Ctrl S is pressed again before the first answer', async () => {
@@ -367,7 +367,7 @@ describe('add Screen, by kind', () => {
 
       await expect.poll(() => path(screen)).toBe(OPENED_ON_THE_NEW_SCREEN)
       expect(posts).toBe(1)
-      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'html', deviceId: 'kitchen', name: 'Fridge note', html: 'Milk', dither: true } }])
+      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'html', owner: { kind: 'device', id: 'kitchen' }, name: 'Fridge note', html: 'Milk', dither: true } }])
     })
 
     it('sends nothing without a name or without markup', async () => {

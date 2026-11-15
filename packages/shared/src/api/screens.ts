@@ -150,14 +150,15 @@ export interface ScreenRead {
   dither: boolean
 }
 
+/** A Screen without any one Device's state: what a Device's read and a Device Group's both carry. */
+export type ScreenBody = Omit<ScreenRead, 'deviceId' | 'readOnly' | 'state' | 'stateCause' | 'picked' | 'renderSignal' | 'imagePath' | 'renderedAt'>
+
 /** The kinds `POST /api/screens` creates; a Mashup and a Plugin Assignment have their own endpoints. */
 export const CREATABLE_SCREEN_KINDS = ['external', 'file', 'html'] as const satisfies readonly ScreenKind[]
 
 interface CreateScreenBase {
   /** Who the Screen is added to, at the end of its Order. */
-  owner?: ScreenOwner
-  /** Deprecated: `{ owner: { kind: 'device', id } }`. Read as that when `owner` is absent, until the admin UI sends `owner`. */
-  deviceId?: string
+  owner: ScreenOwner
   name: string
   /** Defaults to `true`. `false` converts the content with hard thresholds, for text and line art. */
   dither?: boolean
@@ -184,9 +185,7 @@ export interface CreateHtmlScreenInput extends CreateScreenBase {
 export type CreateScreenInput = CreateExternalScreenInput | CreateFileScreenInput | CreateHtmlScreenInput
 
 export interface CreateMashupInput {
-  owner?: ScreenOwner
-  /** Deprecated: see `CreateScreenInput`. */
-  deviceId?: string
+  owner: ScreenOwner
   name: string
   layout: MashupLayout
   /** One Plugin per slot of the layout, in slot order. */
@@ -194,9 +193,7 @@ export interface CreateMashupInput {
 }
 
 export interface AssignPluginInput {
-  owner?: ScreenOwner
-  /** Deprecated: `{ owner: { kind: 'device', id } }`. */
-  deviceId?: string
+  owner: ScreenOwner
 }
 
 export interface ReorderScreensInput {

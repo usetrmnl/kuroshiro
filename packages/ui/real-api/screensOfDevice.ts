@@ -8,7 +8,8 @@ export const ONE_PIXEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAA
 export async function addFileScreen(baseUrl: string, deviceId: string, name: string) {
   const form = new FormData()
   form.set('kind', 'file')
-  form.set('deviceId', deviceId)
+  form.set('owner[kind]', 'device')
+  form.set('owner[id]', deviceId)
   form.set('name', name)
   form.set('file', new Blob([ONE_PIXEL_PNG], { type: 'image/png' }), `${name}.png`)
   const response = await fetch(new URL('api/screens', baseUrl), { method: 'POST', body: form })
@@ -19,7 +20,7 @@ export async function addFileScreen(baseUrl: string, deviceId: string, name: str
 
 /** An External link fetched at every turn, so adding it fetches and converts nothing. */
 export async function addExternalScreen(baseUrl: string, deviceId: string, name: string) {
-  const input = { kind: 'external', deviceId, name, url: new URL('screens/welcome.png', baseUrl).href, fetchManual: false } satisfies CreateExternalScreenInput
+  const input = { kind: 'external', owner: { kind: 'device', id: deviceId }, name, url: new URL('screens/welcome.png', baseUrl).href, fetchManual: false } satisfies CreateExternalScreenInput
   const response = await fetch(new URL('api/screens', baseUrl), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

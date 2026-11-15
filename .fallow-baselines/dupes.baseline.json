@@ -1,15 +1,30 @@
 {
   "kind": "dupes",
   "clone_groups": [
+    "packages/ui/src/pages/devices/__test__/deviceGroupHarness.ts:225-234|packages/ui/src/pages/devices/__test__/screensViewHarness.ts:181-191",
     "packages/ui/src/components/SelectCombobox.vue:28-34|packages/ui/src/components/SelectListbox.vue:20-29",
-    "packages/api/src/devices/display.service.ts:877-882|packages/api/src/mashup/services/screen-render.service.ts:198-203"
+    "packages/ui/src/pages/devices/GroupOpenedScreen.vue:96-111|packages/ui/src/pages/devices/OpenedScreen.vue:83-98",
+    "packages/ui/src/pages/devices/SentenceLine.vue:15-20|packages/ui/src/pages/devices/SettingsDeviceGroup.vue:48-53",
+    "packages/ui/src/pages/devices/DeviceGroupRow.vue:47-68|packages/ui/src/pages/devices/DevicesListRow.vue:76-97",
+    "packages/ui/src/pages/devices/__test__/deviceGroupHarness.ts:273-279|packages/ui/src/pages/devices/__test__/screensViewHarness.ts:221-227",
+    "packages/ui/src/pages/devices/GroupScreensLoading.vue:23-35|packages/ui/src/pages/devices/ScreenRowsSkeleton.vue:29-41"
   ],
   "clone_fingerprints": [
+    "dup:dfc90b67:2",
     "dup:1c24940b:2",
-    "dup:c9320de8:2"
+    "dup:fe90a615:2",
+    "dup:ae575118:2",
+    "dup:aaac1973:2",
+    "dup:3ed9b4bb:2",
+    "dup:27684019:2"
   ],
   "normalized_clone_fingerprints": [
+    "dup:27300fab:2",
     "dup:3d092601:2",
-    "dup:27d65862:2"
+    "dup:37d00fc0:2",
+    "dup:361c650f:2",
+    "dup:4e8c4e75:2",
+    "dup:89248176:2",
+    "dup:03136044:2"
   ]
 }

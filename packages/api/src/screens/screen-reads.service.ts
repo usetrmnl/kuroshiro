@@ -1,4 +1,6 @@
 import type { GroupScreen, ScreenRead } from 'kuroshiro-shared'
+import { promises as fs } from 'node:fs'
+import path from 'node:path'
 import { HttpStatus, Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { isUUID } from 'class-validator'
@@ -9,13 +11,12 @@ import { Device } from '../devices/devices.entity.js'
 import { ApiException } from '../errors/api.exception.js'
 import { needsValues } from '../plugins/plugin-field-values.js'
 import { PluginFieldValuesService } from '../plugins/services/plugin-field-values.service.js'
-import { fileExists } from '../utils/fileExists.js'
 import { DeviceScreen } from './device-screen.entity.js'
 import { screenImagePath } from './screen-image-paths.js'
 import { renderSignalOf, screenStatesOfDevice } from './screen-states.js'
 import { toGroupScreen, toScreenRead } from './screen.mapper.js'
 import { Screen } from './screens.entity.js'
-import { shownRecordsOf } from './shown-records.js'
+import { placeholderRecordOf, shownRecordsOf } from './shown-records.js'
 
 @Injectable()
 export class ScreenReadsService {
@@ -73,13 +74,22 @@ export class ScreenReadsService {
 
     const screens = await this.screenRepository.find({ where: { deviceGroup: { id: groupId } }, relations: this.screenRelations, order: { order: 'ASC' } })
     const members = await this.deviceRepository.find({ where: { deviceGroup: { id: groupId } }, order: { name: 'ASC' } })
-    const { storedFieldValues, pluginsWithFetchAlert } = await this.facts(screens, [])
+    const { renderedIds, storedFieldValues, pluginsWithFetchAlert } = await this.facts(screens, members.map(member => member.id))
 
+    // One query for every member's records of the Group's Screens; a member that has not met a Screen yet reads a placeholder (ADR-0078).
+    const stored = screens.length > 0 && members.length > 0
+      ? await this.deviceScreenRepository.find({ where: { device: { id: In(members.map(member => member.id)) }, screen: { id: In(screens.map(screen => screen.id)) } }, relations: { device: true, screen: true } })
+      : []
     const now = new Date()
-    const memberRecords = await Promise.all(members.map(async (member) => {
-      const records = await shownRecordsOf({ screens: this.screenRepository, records: this.deviceScreenRepository }, member, { create: false, screenRelations: this.screenRelations })
+    const memberRecords = members.map((member) => {
+      const own = new Map(stored.filter(record => record.device.id === member.id).map(record => [record.screen.id, record]))
+      const records = screens.map((screen) => {
+        const record = own.get(screen.id) ?? placeholderRecordOf(member, screen)
+        record.screen = screen
+        return record
+      })
       return { member, records, states: screenStatesOfDevice(member, records, now) }
-    }))
+    })
 
     return screens.map(screen => toGroupScreen(
       screen,
@@ -96,9 +106,38 @@ export class ScreenReadsService {
           isActive: record?.isActive ?? false,
           renderSignal: record ? renderSignalOf(record) : null,
           generatedAt: record?.id ? record.generatedAt : null,
+          isRendered: renderedIds.has(`${member.id}/${screen.id}`),
         }
       }),
     ))
+  }
+
+  /** A Device's own Screens in Order, which it shows unless it is in a Device Group: then they are parked, and none has a Screen State. */
+  async ownOf(deviceId: string): Promise<ScreenRead[]> {
+    const device = isUUID(deviceId) ? await this.deviceRepository.findOneBy({ id: deviceId }) : null
+    if (!device)
+      throw new ApiException(HttpStatus.NOT_FOUND, 'device-not-found', 'Device not found', { id: deviceId })
+    if (!device.deviceGroup)
+      return this.forDevice(deviceId)
+
+    const records = await this.deviceScreenRepository.find({
+      where: { device: { id: deviceId }, screen: { device: { id: deviceId } } },
+      relations: { screen: this.screenRelations },
+      order: { screen: { order: 'ASC' } },
+    })
+    const screens = records.map(record => record.screen)
+    const { renderedIds, storedFieldValues, pluginsWithFetchAlert } = await this.facts(screens, [deviceId])
+
+    return records.map(record => toScreenRead(record.screen, {
+      deviceId,
+      readOnly: false,
+      state: { state: null, stateCause: null, picked: false },
+      renderSignal: renderSignalOf(record),
+      generatedAt: record.generatedAt,
+      isRendered: renderedIds.has(`${deviceId}/${record.screen.id}`),
+      requiredFieldEmpty: !!record.screen.plugin && needsValues(record.screen.plugin.fields ?? [], storedFieldValues.get(record.screen.plugin.id) ?? {}),
+      fetchAlertFiring: !!record.screen.plugin && pluginsWithFetchAlert.has(record.screen.plugin.id),
+    }))
   }
 
   /** One Screen: with its Device's state among that Device's Screens, or, for a Device Group's Screen, every member's. */
@@ -122,13 +161,16 @@ export class ScreenReadsService {
     return { renderedIds, storedFieldValues, pluginsWithFetchAlert }
   }
 
-  /** `deviceId/screenId` of each Screen whose rendered image is on disk for the Device. */
+  /** `deviceId/screenId` of each Screen whose rendered image is on disk for the Device: one directory read per Device, whatever the number of Screens. */
   private async renderedScreenIds(deviceIds: string[], screens: Screen[]): Promise<Set<string>> {
-    const pairs = deviceIds.flatMap(deviceId => screens.map(screen => ({ deviceId, screenId: screen.id })))
-    const rendered = await Promise.all(pairs.map(async ({ deviceId, screenId }) =>
-      await fileExists(screenImagePath(deviceId, screenId)) ? [`${deviceId}/${screenId}`] : [],
-    ))
-    return new Set(rendered.flat())
+    const screenIds = new Set(screens.map(screen => screen.id))
+    const perDevice = await Promise.all(deviceIds.map(async (deviceId) => {
+      const files = await fs.readdir(path.dirname(screenImagePath(deviceId, ''))).catch(() => [] as string[])
+      return files
+        .filter(file => file.endsWith('.png') && screenIds.has(file.slice(0, -'.png'.length)))
+        .map(file => `${deviceId}/${file.slice(0, -'.png'.length)}`)
+    }))
+    return new Set(perDevice.flat())
   }
 
   private async pluginIdsWithFiringFetchAlert(pluginIds: string[]): Promise<Set<string>> {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { fakeShellReads, mountApp } from '@/testing/app'
 import { buildAlert, buildAlertsList } from '@/testing/fixtures/alerts'
+import { buildDeviceGroupSummary } from '@/testing/fixtures/device-groups'
 import { buildDeviceSummary } from '@/testing/fixtures/devices'
 import { fakeScreenImages } from '@/testing/images'
 import { expectPageScreenshots } from '@/testing/screenshots'
@@ -9,7 +10,7 @@ import { freezeTime } from '@/testing/time'
 const SEEN_AT = '2026-10-03T07:31:00.000Z'
 
 const devices = [
-  buildDeviceSummary({ id: 'kitchen', name: 'Kitchen', lastSeenAt: SEEN_AT, batteryPercent: 18 }),
+  buildDeviceSummary({ id: 'kitchen', name: 'Kitchen', lastSeenAt: SEEN_AT, batteryPercent: 18, deviceGroup: { id: 'downstairs', name: 'Downstairs' } }),
   buildDeviceSummary({
     id: 'hallway',
     name: 'Hallway',
@@ -37,14 +38,19 @@ const devices = [
 ]
 
 describe('the Devices list', () => {
-  it('with an Active Screen and the low-battery Alert firing, a Device asleep and one that never polled', async () => {
+  it('with an Active Screen and the low-battery Alert firing, a Device asleep, one that never polled, and a Device Group under them', async () => {
     freezeTime('2026-10-03T07:35:00.000Z')
     fakeScreenImages()
-    fakeShellReads({ devices, alerts: buildAlertsList({ active: [buildAlert({ kind: 'device-low-battery', device: { id: 'kitchen', name: 'Kitchen' } })] }) })
+    fakeShellReads({
+      devices,
+      alerts: buildAlertsList({ active: [buildAlert({ kind: 'device-low-battery', device: { id: 'kitchen', name: 'Kitchen' } })] }),
+      groups: [buildDeviceGroupSummary({ id: 'downstairs', name: 'Downstairs', memberCount: 1, screenCount: 3 })],
+    })
     const screen = await mountApp({ at: '/devices' })
     await expect.element(screen.getByRole('link', { name: '1 Alert firing' })).toBeVisible()
     await expect.element(screen.getByRole('img', { name: 'On Kitchen: Calendar' })).toBeVisible()
     await expect.element(screen.getByText('Has not called in yet')).toBeVisible()
+    await expect.element(screen.getByRole('main').getByRole('link', { name: 'Downstairs' })).toBeVisible()
     await expect.poll(() => [...document.images].every(image => image.complete)).toBe(true)
 
     await expectPageScreenshots('devices-list')

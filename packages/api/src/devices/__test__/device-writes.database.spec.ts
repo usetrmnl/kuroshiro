@@ -1,4 +1,4 @@
-import type { DeviceDetail } from 'kuroshiro-shared'
+import type { DeviceDetail, DeviceSummary } from 'kuroshiro-shared'
 import type { DataSource } from 'typeorm'
 import type { DeviceModelsService } from '../../device-models/device-models.service.js'
 import type { PaletteSelectionService } from '../../device-models/palette-selection.service.js'
@@ -148,6 +148,8 @@ describe('the Device write and delete against a real database', () => {
       const joined = await patch(device.id, { deviceGroupId: group.id })
       expect(joined.status).toBe(200)
       expect(await joined.json()).toMatchObject({ deviceGroup: { id: group.id, name: 'Downstairs' } })
+      const listed = await (await http.request('/api/devices')).json() as DeviceSummary[]
+      expect(listed.find(summary => summary.id === device.id)?.deviceGroup).toEqual({ id: group.id, name: 'Downstairs' })
 
       const left = await patch(device.id, { deviceGroupId: null })
       expect(await left.json()).toMatchObject({ deviceGroup: null })

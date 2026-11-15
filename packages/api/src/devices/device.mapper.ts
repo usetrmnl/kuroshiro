@@ -144,6 +144,7 @@ export function toDeviceSummary(device: Device, facts: DeviceSummaryFacts): Devi
     isProxied: isProxiedDevice(device),
     sleep: toSleepState(device, facts.now),
     currentScreen: toCurrentScreen(device, facts.servedScreen),
+    deviceGroup: device.deviceGroup ? { id: device.deviceGroup.id, name: device.deviceGroup.name } : null,
   }
 }
 
@@ -176,7 +177,6 @@ export function toDeviceDetail(device: Device, facts: DeviceDetailFacts): Device
       firmwarePush: device.updateFirmware,
     },
     sleepImagePath: device.sleepImageGeneratedAt ? toImagePath(sleepImageRootRelativePath(device.id), device.sleepImageGeneratedAt) : null,
-    deviceGroup: device.deviceGroup ? { id: device.deviceGroup.id, name: device.deviceGroup.name } : null,
     lastWakeSource: device.lastWakeSource ?? null,
     sensors: facts.sensors.map(({ kind, value, unit }) => ({ kind, value, unit })),
     screenCount: facts.screenCount,

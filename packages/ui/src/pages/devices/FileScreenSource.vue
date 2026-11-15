@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { DeviceDetail, ScreenRead } from 'kuroshiro-shared'
+import type { ScreenBody } from 'kuroshiro-shared'
+import type { RenderTarget } from './screenTarget'
 import { computed, nextTick, ref, useId, useTemplateRef } from 'vue'
 import { NOT_IN_DEMO } from '@/api/refusalWording'
 import Button from '@/components/Button.vue'
@@ -9,9 +10,12 @@ import ScreenDitheringField from './ScreenDitheringField.vue'
 import { fileFacts } from './screenSourceWording'
 
 const props = defineProps<{
-  screen: ScreenRead
-  file: NonNullable<ScreenRead['file']>
-  device: DeviceDetail
+  screen: ScreenBody
+  file: NonNullable<ScreenBody['file']>
+  /** The converted image as it is now, for the Device that reads it. */
+  imagePath: string | null
+  /** The Device the image is converted for; none on a Device Group without a member. */
+  rendersAs: RenderTarget | undefined
   /** Reads the Screens again, after the image was replaced. */
   reload: () => Promise<void>
 }>()
@@ -21,7 +25,7 @@ const demoNoteId = useId()
 const opener = useTemplateRef('opener')
 
 const replacing = ref(false)
-const facts = computed(() => fileFacts(props.file, props.device))
+const facts = computed(() => fileFacts(props.file, props.rendersAs))
 const inDemo = computed(() => instance.data?.demoMode ?? false)
 
 async function close() {
@@ -35,7 +39,8 @@ async function close() {
   <ReplaceFile
     v-if="replacing && instance.data"
     :screen="screen"
-    :device="device"
+    :image-path="imagePath"
+    :renders-as="rendersAs"
     :max-bytes="instance.data.limits.imageUploadBytes"
     :reload="reload"
     @close="close"

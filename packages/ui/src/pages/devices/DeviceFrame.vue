@@ -3,6 +3,7 @@ import type { NavItem } from '@/components/navItem'
 import { computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { getDevice } from '@/api/devices'
+import { listScreens } from '@/api/screens'
 import Button from '@/components/Button.vue'
 import Tabs from '@/components/Tabs.vue'
 import MissingPage from '@/patterns/MissingPage.vue'
@@ -12,6 +13,7 @@ import { useDevices } from '@/reads/sharedReads'
 import { DEVICES_PATH, MOST_DEVICES_NAMED } from '@/shell/barEntries'
 import { provideDeviceFrame } from './deviceFrame'
 import { addScreenPath, deviceLogsPath, devicePath, deviceSettingsPath } from './devicePaths'
+import { deviceTarget, provideScreenTarget } from './screenTarget'
 
 const route = useRoute()
 const devices = useDevices()
@@ -26,6 +28,15 @@ const name = computed(() => device.data?.name
 const path = computed(() => devicePath(deviceId.value))
 
 provideDeviceFrame({ device, listed, name, path })
+provideScreenTarget({
+  target: computed(() => device.data && deviceTarget(device.data)),
+  name,
+  path,
+  waiting: computed(() => device.waiting),
+  failure: computed(() => device.failure),
+  reload: () => device.reload(),
+  listScreens: () => listScreens(deviceId.value),
+})
 
 const views = computed<NavItem[]>(() => [
   { label: 'Screens', to: path.value },
@@ -37,7 +48,8 @@ const views = computed<NavItem[]>(() => [
 const back = computed<NavItem | undefined>(() =>
   (devices.data?.length ?? 0) > MOST_DEVICES_NAMED ? { label: 'Devices', to: DEVICES_PATH } : undefined)
 
-const addsScreen = computed(() => route.path === path.value && (device.data?.screenCount ?? 0) > 0)
+/** A Device in a Device Group shows the Group's Screens, which are added on the Group. */
+const addsScreen = computed(() => route.path === path.value && !device.data?.deviceGroup && (device.data?.screenCount ?? 0) > 0)
 </script>
 
 <template>

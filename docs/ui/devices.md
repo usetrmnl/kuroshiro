@@ -18,6 +18,7 @@ Everything under **Devices** in the rebuilt admin UI: a Device's Screens view, a
 | `/devices/:deviceId/settings` | Settings. |
 | `/devices/:deviceId/logs` | Logs. |
 | `/connect` | Connect a Device. |
+| `/device-groups/:groupId` and under it | A Device Group's page, its Add Screen and its Edit HTML: [device-groups.md](./device-groups.md). |
 
 `:deviceId` is the Device's id. A Device that does not exist gets the "No Device here" page of the shared patterns ([render][missing]).
 
@@ -44,7 +45,9 @@ Decides the two limits [App shell and navigation](https://github.com/usetrmnl/ku
   - The Device's name at `title-md`.
   - One line saying what it shows: "Showing **{Screen}**" for an Active Screen; otherwise the title the Screens view gives the same state ("Asleep until 06:00", "No Screens yet", "No Screen to show", "Mirrored from TRMNL", "Mirroring failed").
   - One line of facts in `ink-soft`: any firing Alert first, in red with the red square ("Alert: battery low", "Alert: offline"), then "Last seen {when} · Battery {n} %". A Device that never polled reads "Has not called in yet" and has no battery fact.
+- A Device in a Device Group says "In {Group}" among its facts, after any firing Alert.
 - No counts, no sorting control, no search. The list is whole at any length.
+- Under the Devices, the Device Groups with "New Group": [device-groups.md](./device-groups.md#the-device-groups-under-the-devices).
 - **Loading:** three rows with a rendering plate and two `wash` bars, and "Loading Devices". **Failed:** the notice "Could not load the Devices." **Empty:** never shown; no Devices means Connect a Device.
 
 ## A Device's Screens view
@@ -54,6 +57,8 @@ Decides the two limits [App shell and navigation](https://github.com/usetrmnl/ku
 **For:** "what is this Device showing, and what comes next." The plate is the one primary thing.
 
 Layout, as approved: title line with the Device's name and "Add Screen" (primary; a link to Add Screen; absent while the Device has no Screens, where the empty block carries it), the tabs Screens, Settings, Logs, then the 576 px plate with a 296 px column beside it, then "Screens in Order" full width. On phone: plate, column, rows.
+
+A Device in a Device Group shows the Group's Screens read-only, with its own parked under them: [device-groups.md, "A Device in a Group"](./device-groups.md#a-device-in-a-group).
 
 ### The plate and the sentences beside it
 
@@ -285,6 +290,7 @@ The form ends with the primary button, "Cancel" (back to the Screens view) and t
 | Device Model | select of the Device Models, "{label} · {width} × {height}", deprecated ones left out unless assigned | Note: "{Device} reports {reported model}". When the reported size differs from the chosen Device Model's: the problem icon and "{Device} reports {w} × {h}, which is not this Device Model's size. Images are rendered for the Device Model chosen here." When the assigned Device Model is deprecated: "TRMNL no longer lists this Device Model." Until one is resolved: "Not resolved yet. Images are rendered for TRMNL OG." |
 | Palette | select of the Palettes this Device Model supports, custom Palettes of a matching Palette Family included and marked "· custom" | Changing the Device Model resets the Palette to that Device Model's richest one. Under the row: "Changing the Device Model or the Palette converts this Device's stored images again." |
 | Refresh rate | "every" {number} {minutes\|hours} | At least 1 minute, at most 24 hours: "Enter between 1 minute and 24 hours." Under the row: "How often {Device} polls, and so how often Rotation moves on. It also sets when {Device} counts as offline." On a Proxied Device the control is replaced by "Set by TRMNL" and "{Device} is a Proxied Device, so TRMNL's answer decides how often it polls." |
+| Device Group | select, "None" then every Group | The Group whose Screens the Device shows: [device-groups.md](./device-groups.md#a-device-in-a-group). |
 
 ### Sleep Mode
 

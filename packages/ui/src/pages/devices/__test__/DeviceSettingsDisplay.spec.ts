@@ -1,10 +1,62 @@
+import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import { expectAccessible } from '@/testing/a11y'
-import { apiErrorResponse } from '@/testing/api/server'
+import { api, apiErrorResponse, apiUrl } from '@/testing/api/server'
 import { buildDeviceModel } from '@/testing/fixtures/device-models'
 import { expectNoHorizontalOverflow } from '@/testing/overflow'
 import { choose, errorOf, fakeKitchenSettings, held, KITCHEN, MODELS, mountSettings, noteOf, offeredBy, rowOf, shownOf, sideOf, stateOf, words } from './deviceSettingsHarness'
+
+describe('the Device Group', () => {
+  it('offers "None" and every Group, and sends the chosen Group, whose Screens the note then says the Device shows', async () => {
+    const faked = fakeKitchenSettings()
+    const screen = await mountSettings()
+
+    expect(await offeredBy(screen, 'Device Group')).toEqual(['None', 'Downstairs', 'Upstairs'])
+    expect(noteOf(screen, 'Device Group')).toBe('Kitchen shows its own Screens. In a Group it shows the Group\'s instead and parks its own; joining starts the Group\'s Order from the first Screen.')
+
+    await choose(screen, 'Device Group', 'Downstairs')
+
+    await expect.poll(() => faked.writes).toEqual([{ deviceGroupId: 'downstairs' }])
+    await expect.poll(() => noteOf(screen, 'Device Group')).toBe('Kitchen shows Downstairs\'s Screens; its own are parked until it leaves. Joining or leaving starts the Order from the first Screen.')
+    await expect.element(rowOf(screen, 'Device Group')!.querySelector('a')!).toHaveAttribute('href', '/device-groups/downstairs')
+  })
+
+  it('reads the Devices again after the Group changed, so the Devices list\'s "In {Group}" follows', async () => {
+    const faked = fakeKitchenSettings()
+    let devicesRead = 0
+    api.use(http.get(apiUrl('devices'), () => {
+      devicesRead += 1
+      return HttpResponse.json([faked.device])
+    }))
+    const screen = await mountSettings()
+    const before = devicesRead
+
+    await choose(screen, 'Device Group', 'Downstairs')
+
+    await expect.poll(() => stateOf(screen, 'Device Group')).toBe('Saved')
+    expect(devicesRead).toBe(before + 1)
+  })
+
+  it('leaves the Group with "None", sent as null', async () => {
+    const faked = fakeKitchenSettings({ device: { ...KITCHEN, deviceGroup: { id: 'downstairs', name: 'Downstairs' } } })
+    const screen = await mountSettings()
+
+    await choose(screen, 'Device Group', 'None')
+
+    await expect.poll(() => faked.writes).toEqual([{ deviceGroupId: null }])
+    await expect.poll(() => stateOf(screen, 'Device Group')).toBe('Saved')
+  })
+
+  it('points at the Devices list when there is no Group yet', async () => {
+    fakeKitchenSettings({ groups: [] })
+    const screen = await mountSettings()
+
+    expect(await offeredBy(screen, 'Device Group')).toEqual(['None'])
+    expect(noteOf(screen, 'Device Group')).toBe('No Device Groups yet. Make one from the Devices list.')
+    await expect.element(rowOf(screen, 'Device Group')!.querySelector('a')!).toHaveAttribute('href', '/devices')
+  })
+})
 
 type Screen = Awaited<ReturnType<typeof mountSettings>>
 

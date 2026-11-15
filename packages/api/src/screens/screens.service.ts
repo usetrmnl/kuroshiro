@@ -26,7 +26,7 @@ import { CreateScreenDto } from './dto/create-screen.dto.js'
 import { UpdateScreenDto } from './dto/update-screen.dto.js'
 import { originalImagePath, screenImagePath } from './screen-image-paths.js'
 import { closeGapInOrder, joinEndOfOrder, writeOrder } from './screen-order.js'
-import { ownedBy, ownerOfRequest, ownerOfScreen } from './screen-owner.js'
+import { ownedBy, ownerOfScreen } from './screen-owner.js'
 import { Screen } from './screens.entity.js'
 
 type FileFacts = Pick<Screen, 'fileOriginalName' | 'fileWidth' | 'fileHeight' | 'fileBytes' | 'fileUploadedAt'>
@@ -66,9 +66,7 @@ export class ScreensService {
 
   /** Adds an External link, File or HTML Screen at the end of the owner's Order and answers its id. */
   async add(input: CreateScreenDto, file?: Express.Multer.File): Promise<string> {
-    const owner = ownerOfRequest(input)
-    if (!owner)
-      throw new ValidationException([{ path: 'owner', message: 'A Screen needs an owner.' }])
+    const { owner } = input
     this.logger.log(`Adding ${input.kind} screen to ${owner.kind} ${owner.id}`)
     this.assertFileMatchesKind(input, file)
     const targets = await this.targetsOf(owner)

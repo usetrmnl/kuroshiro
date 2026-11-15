@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DeviceDetail } from 'kuroshiro-shared'
+import type { ScreenTarget } from './screenTarget'
 import { computed, ref } from 'vue'
 import { listPlugins } from '@/api/plugins'
 import { assignPlugin } from '@/api/screens'
@@ -17,7 +17,7 @@ import { linkTo, sentence } from './sentence'
 import SentenceLine from './SentenceLine.vue'
 
 const props = defineProps<{
-  device: DeviceDetail
+  target: ScreenTarget
 }>()
 
 /** A list this long is searched rather than read. */
@@ -29,12 +29,14 @@ const addition = useAddScreen([], 'Not assigned.')
 const query = ref('')
 const picked = ref<string>()
 
-const choices = computed(() => pluginChoices(pluginsCalled(plugins.data ?? [], query.value), props.device))
+const choices = computed(() => pluginChoices(pluginsCalled(plugins.data ?? [], query.value), { id: props.target.owner.id, name: props.target.name }))
 const chosen = computed(() => preselected(choices.value, picked.value))
+/** Add a Plugin carries a Device to assign the new Plugin to; a Group is not carried, so its shortcut only leads there. */
+const carried = computed(() => props.target.owner.kind === 'device' ? props.target.owner.id : undefined)
 const shortcut = computed(() => sentence(
   'No Plugin for it yet? ',
-  linkTo('Import a Recipe or build one', addPluginPath('recipe', props.device.id)),
-  `; it is assigned to ${props.device.name} when you save it.`,
+  linkTo('Import a Recipe or build one', addPluginPath('recipe', carried.value)),
+  carried.value ? `; it is assigned to ${props.target.name} when you save it.` : '.',
 ))
 const changed = computed(() => !addition.added && (picked.value !== undefined || query.value.trim() !== ''))
 useReportScreenFormChanged(changed)
@@ -42,13 +44,13 @@ useReportScreenFormChanged(changed)
 function assign() {
   const pluginId = chosen.value
   if (pluginId)
-    void addition.create(() => assignPlugin(pluginId, { deviceId: props.device.id }))
+    void addition.create(() => assignPlugin(pluginId, { owner: props.target.owner }))
 }
 </script>
 
 <template>
   <LoadBody v-slot="{ data }" :load="plugins" loading="Loading the Plugins" failed="Could not load the Plugins.">
-    <NoPluginToAssign v-if="data.length === 0" :device="device" />
+    <NoPluginToAssign v-if="data.length === 0" :target="target" />
     <form v-else class="add-plugin-screen" novalidate @submit.prevent="assign">
       <SearchField v-if="data.length >= SEARCHED_FROM" v-model="query" aria-label="Find a Plugin" placeholder="Find a Plugin" />
       <div v-if="choices.length > 0" class="plugins">

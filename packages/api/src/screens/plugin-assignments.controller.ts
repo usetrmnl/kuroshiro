@@ -1,9 +1,7 @@
 import type { GroupScreen, ScreenRead } from 'kuroshiro-shared'
 import { Body, Controller, Delete, HttpCode, HttpStatus, Param, Post } from '@nestjs/common'
-import { ValidationException } from '../errors/api.exception.js'
 import { AssignPluginToDeviceDto } from '../plugins/dto/assign-plugin-to-device.dto.js'
 import { PluginAssignmentsService } from '../plugins/services/plugin-assignments.service.js'
-import { ownerOfRequest } from './screen-owner.js'
 import { ScreenReadsService } from './screen-reads.service.js'
 
 /**
@@ -17,10 +15,7 @@ export class PluginAssignmentsController {
 
   @Post('assign')
   async assign(@Param('pluginId') pluginId: string, @Body() body: AssignPluginToDeviceDto): Promise<ScreenRead | GroupScreen> {
-    const owner = ownerOfRequest(body)
-    if (!owner)
-      throw new ValidationException([{ path: 'owner', message: 'A Plugin is assigned to an owner.' }])
-    return this.screenReads.forScreen(await this.assignments.assign(pluginId, owner))
+    return this.screenReads.forScreen(await this.assignments.assign(pluginId, body.owner))
   }
 
   @Delete('assignments/device-groups/:groupId')

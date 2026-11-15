@@ -9,6 +9,7 @@ import TitleLine from '@/patterns/TitleLine.vue'
 import WashBar from '@/patterns/WashBar.vue'
 import { useAlerts, useDevices } from '@/reads/sharedReads'
 import { CONNECT_PATH } from '@/shell/barEntries'
+import DeviceGroupsSection from './DeviceGroupsSection.vue'
 import DevicesListRow from './DevicesListRow.vue'
 
 const router = useRouter()
@@ -58,6 +59,7 @@ watchEffect(() => {
       </div>
     </template>
   </LoadBody>
+  <DeviceGroupsSection v-if="devices.data && devices.data.length > 0" />
 </template>
 
 <style scoped>

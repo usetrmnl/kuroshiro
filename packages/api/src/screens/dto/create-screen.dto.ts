@@ -1,6 +1,6 @@
 import type { CreateScreenInput } from 'kuroshiro-shared'
 import { Transform, Type } from 'class-transformer'
-import { IsBoolean, IsDefined, IsIn, IsNotEmpty, IsString, IsUrl, IsUUID, ValidateIf, ValidateNested } from 'class-validator'
+import { IsBoolean, IsDefined, IsIn, IsNotEmpty, IsString, IsUrl, ValidateIf, ValidateNested } from 'class-validator'
 import { CREATABLE_SCREEN_KINDS } from 'kuroshiro-shared'
 import { trimmed } from '../../utils/trimmed.js'
 import { ScreenOwnerDto } from './screen-owner.dto.js'
@@ -21,16 +21,10 @@ const BOOLEAN_BY_FORM_VALUE: Record<string, boolean> = { true: true, false: fals
  * or, with a file, as `multipart/form-data`, where every value is a string.
  */
 export class CreateScreenDto implements CreateScreenFields {
-  @ValidateIf((input: CreateScreenDto) => input.deviceId === undefined)
   @IsDefined()
   @ValidateNested()
   @Type(() => ScreenOwnerDto)
-  owner?: ScreenOwnerDto
-
-  /** Deprecated: read as `{ owner: { kind: 'device', id } }` until the admin UI sends `owner`. */
-  @ValidateIf((input: CreateScreenDto) => input.owner === undefined)
-  @IsUUID()
-  deviceId?: string
+  owner: ScreenOwnerDto
 
   @IsIn(CREATABLE_SCREEN_KINDS)
   kind: CreateScreenInput['kind']

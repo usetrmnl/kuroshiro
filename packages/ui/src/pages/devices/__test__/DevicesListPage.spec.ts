@@ -1,16 +1,19 @@
 import type { CurrentScreen, DeviceSummary } from 'kuroshiro-shared'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
+import { userEvent } from 'vitest/browser'
 import { expectAccessible } from '@/testing/a11y'
 import { api, apiErrorResponse, apiUrl } from '@/testing/api/server'
 import { fakeShellReads, mountApp } from '@/testing/app'
 import { buildAlert, buildAlertsList } from '@/testing/fixtures/alerts'
+import { buildDeviceGroupSummary } from '@/testing/fixtures/device-groups'
 import { buildDeviceSummary } from '@/testing/fixtures/devices'
 import { buildInstanceFacts } from '@/testing/fixtures/instance'
 import { fakeScreenImages } from '@/testing/images'
 import { expectNoHorizontalOverflow } from '@/testing/overflow'
 import { elementsInSealColour } from '@/testing/sealColour'
 import { freezeTime } from '@/testing/time'
+import { fakeGroupsList } from './deviceGroupHarness'
 
 const NOW = '2026-10-03T07:35:00.000Z'
 const SEEN_AT = '2026-10-03T07:31:00.000Z'
@@ -131,6 +134,7 @@ describe('the Devices list', () => {
     api.use(
       http.get(apiUrl('instance'), () => HttpResponse.json(buildInstanceFacts())),
       http.get(apiUrl('alerts'), () => HttpResponse.json(buildAlertsList())),
+      http.get(apiUrl('device-groups'), () => HttpResponse.json([])),
       http.get(apiUrl('devices'), () => answers ? HttpResponse.json([KITCHEN, HALLWAY]) : apiErrorResponse({ statusCode: 500, code: 'internal' })),
     )
     const screen = await mountApp({ at: '/devices' })
@@ -154,6 +158,7 @@ describe('the Devices list', () => {
     api.use(
       http.get(apiUrl('instance'), () => HttpResponse.json(buildInstanceFacts())),
       http.get(apiUrl('alerts'), () => HttpResponse.json(buildAlertsList())),
+      http.get(apiUrl('device-groups'), () => HttpResponse.json([])),
       http.get(apiUrl('devices'), async () => {
         await held
         return HttpResponse.json([KITCHEN, HALLWAY])
@@ -171,6 +176,86 @@ describe('the Devices list', () => {
   it('is accessible in both themes and does not overflow at phone, tablet or desktop width', async () => {
     const screen = await mountList([KITCHEN, HALLWAY, STUDY, ATTIC, CELLAR], buildAlertsList({ active: [buildAlert({ kind: 'device-low-battery', device: { id: 'kitchen', name: 'Kitchen' } })] }))
     await expect.poll(() => rows(screen).length).toBe(5)
+
+    await expectAccessible()
+    await expectNoHorizontalOverflow()
+  })
+})
+
+describe('the Device Groups under the Devices', () => {
+  const groups = (screen: Screen) => screen.getByRole('main').element().querySelector('.device-groups')
+
+  it('lists every Group with its Devices and Screens counted, each a link to its page, and names a Device\'s Group among its facts', async () => {
+    fakeGroupsList([
+      buildDeviceGroupSummary({ id: 'downstairs', name: 'Downstairs', memberCount: 2, screenCount: 3 }),
+      buildDeviceGroupSummary({ id: 'upstairs', name: 'Upstairs', memberCount: 1, screenCount: 0 }),
+    ])
+    const screen = await mountApp({ at: '/devices' })
+
+    await expect.element(screen.getByRole('main').getByRole('link', { name: 'Downstairs' })).toHaveAttribute('href', '/device-groups/downstairs')
+    expect([...groups(screen)!.querySelectorAll('.group-row')].map(row => [words(row.querySelector('.name')), words(row.querySelector('.facts'))])).toEqual([['Downstairs', '2 Devices · 3 Screens'], ['Upstairs', '1 Device · 0 Screens']])
+    await expect.poll(() => saidOf(screen, 'Kitchen').facts).toBe('In Downstairs · Last seen 4 min ago · Battery 76 %')
+    expect(saidOf(screen, 'Study').facts).toBe('Last seen 4 min ago · Battery 76 %')
+  })
+
+  it('says there are none yet', async () => {
+    fakeGroupsList([])
+    const screen = await mountApp({ at: '/devices' })
+
+    await expect.element(screen.getByText('No Device Groups yet. A Group is one set of Screens that several Devices show together, each at its own pace.')).toBeVisible()
+  })
+
+  it('creates a Group from "New Group" and opens its page; an empty name is refused on the field', async () => {
+    const faked = fakeGroupsList([])
+    const screen = await mountApp({ at: '/devices' })
+
+    await screen.getByRole('button', { name: 'New Group' }).click()
+    const field = screen.getByRole('group', { name: 'New Group' }).getByRole('textbox', { name: 'Name' })
+    await expect.element(field).toHaveFocus()
+    await screen.getByRole('button', { name: 'Create Group' }).click()
+    await expect.element(screen.getByText('A Device Group needs a name.')).toBeVisible()
+    expect(faked.created).toEqual([])
+
+    await field.fill(' Lobby ')
+    await userEvent.keyboard('{Enter}')
+
+    await expect.poll(() => faked.created).toEqual([{ name: 'Lobby' }])
+    await expect.poll(() => screen.router.currentRoute.value.path).toBe('/device-groups/new-group')
+    await expect.element(screen.getByRole('heading', { level: 1, name: 'Lobby' })).toBeVisible()
+  })
+
+  it('says why a Group could not be created and keeps the name, and "Cancel" closes the form and gives the button the focus back', async () => {
+    const faked = fakeGroupsList([buildDeviceGroupSummary({ id: 'downstairs', name: 'Downstairs' })])
+    faked.refusing = apiErrorResponse({ statusCode: 409, code: 'device-group-name-taken' })
+    const screen = await mountApp({ at: '/devices' })
+
+    await screen.getByRole('button', { name: 'New Group' }).click()
+    await screen.getByRole('textbox', { name: 'Name' }).fill('Downstairs')
+    await screen.getByRole('button', { name: 'Create Group' }).click()
+    await expect.element(screen.getByText('There is already a Device Group with that name.')).toBeVisible()
+    await expect.element(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Downstairs')
+
+    await screen.getByRole('button', { name: 'Cancel' }).click()
+
+    expect(screen.getByRole('textbox', { name: 'Name' }).query()).toBeNull()
+    await expect.element(screen.getByRole('button', { name: 'New Group' })).toHaveFocus()
+  })
+
+  it('shows the notice under the heading when the Groups cannot be loaded, and leaves the Devices alone', async () => {
+    fakeGroupsList()
+    api.use(http.get(apiUrl('device-groups'), () => apiErrorResponse({ statusCode: 500, code: 'internal' })))
+    const screen = await mountApp({ at: '/devices' })
+
+    await expect.element(screen.getByRole('alert')).toHaveTextContent('Could not load the Device Groups. Something went wrong on the server.')
+    await expect.poll(() => rows(screen).length).toBe(3)
+  })
+
+  it('is accessible with Groups listed and the form open', async () => {
+    fakeGroupsList()
+    const screen = await mountApp({ at: '/devices' })
+    await expect.element(screen.getByRole('main').getByRole('link', { name: 'Downstairs' })).toBeVisible()
+    await screen.getByRole('button', { name: 'New Group' }).click()
+    await expect.poll(() => [...document.images].every(image => image.complete)).toBe(true)
 
     await expectAccessible()
     await expectNoHorizontalOverflow()

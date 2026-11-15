@@ -110,7 +110,7 @@ describe('screensService', () => {
   })
 
   it('refuses a kind other than file sent with a file, at path file', async () => {
-    const refusal = await service.add({ deviceId: 'dev', kind: 'html', name: 'Markup', html: '<p></p>' }, makeMulterFile()).catch((err: unknown) => err)
+    const refusal = await service.add({ owner: { kind: 'device', id: 'dev' }, kind: 'html', name: 'Markup', html: '<p></p>' }, makeMulterFile()).catch((err: unknown) => err)
 
     expect(refusal).toBeInstanceOf(ValidationException)
     expect((refusal as ValidationException).fields).toEqual([{ path: 'file', message: 'Only a File Screen takes a file.' }])

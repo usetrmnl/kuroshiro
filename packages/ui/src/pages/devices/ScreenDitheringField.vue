@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { ScreenRead } from 'kuroshiro-shared'
+import type { ScreenBody } from 'kuroshiro-shared'
 import SaveState from '@/components/SaveState.vue'
 import DitheringField from '@/patterns/DitheringField.vue'
 import { useScreenDither } from './useScreenDither'
 
 const props = defineProps<{
-  screen: ScreenRead
+  screen: ScreenBody
   /** Reads the Screens again, after the switch was saved. */
   reload: () => Promise<void>
 }>()

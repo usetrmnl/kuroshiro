@@ -13,6 +13,12 @@ export class DeviceScreensController {
     return this.screenReads.forDevice(deviceId)
   }
 
+  /** The Device's own Screens: what it shows when it is not in a Device Group, parked while it is. */
+  @Get('own')
+  async own(@Param('deviceId') deviceId: string): Promise<ScreenRead[]> {
+    return this.screenReads.ownOf(deviceId)
+  }
+
   @Put('order')
   async reorder(@Param('deviceId') deviceId: string, @Body() body: ReorderScreensDto): Promise<ScreenRead[]> {
     await this.screensService.reorder({ kind: 'device', id: deviceId }, body.screenIds)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ScreenRead } from 'kuroshiro-shared'
+import type { ScreenBody } from 'kuroshiro-shared'
 import type { FetchChoice } from './fetchChoices'
 import { computed, ref, watch } from 'vue'
 import { IMAGE_NOT_FETCHED } from '@/api/refusalWording'
@@ -17,8 +17,10 @@ import ScreenDitheringField from './ScreenDitheringField.vue'
 import { isWebAddress } from './screenSourceWording'
 
 const props = defineProps<{
-  screen: ScreenRead
-  external: NonNullable<ScreenRead['external']>
+  screen: ScreenBody
+  external: NonNullable<ScreenBody['external']>
+  /** When the kept image was last fetched, for the Device that reads it. */
+  renderedAt: string | null
   /** Reads the Screens again, after a write to this one. */
   reload: () => Promise<void>
 }>()
@@ -98,8 +100,8 @@ async function refresh() {
     <Button :loading="refreshing" @click="refresh">
       Refresh image
     </Button>
-    <p v-if="screen.renderedAt" class="fetched">
-      Fetched <RelativeTime :at="screen.renderedAt" />
+    <p v-if="renderedAt" class="fetched">
+      Fetched <RelativeTime :at="renderedAt" />
     </p>
   </div>
 </template>

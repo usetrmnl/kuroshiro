@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DeviceDetail, ScreenRead } from 'kuroshiro-shared'
+import type { HtmlEditable, ScreenTarget } from './screenTarget'
 import { computed, nextTick, ref, useId } from 'vue'
 import { useRouter } from 'vue-router'
 import { updateScreen } from '@/api/screens'
@@ -9,18 +9,18 @@ import { failureReason, notSavedSentence } from '@/components/failureReason'
 import FieldError from '@/components/FieldError.vue'
 import AddFormFoot from '@/patterns/AddFormFoot.vue'
 import DitheringField from '@/patterns/DitheringField.vue'
-import { useDeviceFrame } from './deviceFrame'
 import HtmlPreview from './HtmlPreview.vue'
 import { htmlProblem, possessive, screenName } from './screenNaming'
+import { useScreenTarget } from './screenTarget'
 
 const props = defineProps<{
-  device: DeviceDetail
-  /** An HTML Screen of the Device. */
-  screen: ScreenRead
+  target: ScreenTarget
+  /** An HTML Screen of the target. */
+  screen: HtmlEditable
 }>()
 
 const router = useRouter()
-const { path } = useDeviceFrame()
+const { path } = useScreenTarget()
 
 const headingId = useId()
 const errorId = useId()
@@ -83,7 +83,10 @@ async function save() {
         <DitheringField v-model="dither" />
       </template>
       <template #plate>
-        <HtmlPreview :device="device" :html="html" :name="`Preview of ${named}`" :dither="dither" facts />
+        <HtmlPreview v-if="target.rendersAs" :device="target.rendersAs" :html="html" :name="`Preview of ${named}`" :dither="dither" facts />
+        <p v-else class="no-preview">
+          No preview: {{ target.name }} has no Device yet to render it for.
+        </p>
       </template>
     </EditorBench>
     <AddFormFoot
@@ -95,7 +98,7 @@ async function save() {
       retryable
       @retry="save"
     >
-      {{ device.name }} shows the change when this Screen's turn next comes.
+      {{ target.name }} shows the change when this Screen's turn next comes.
       <template #lost>
         Your changes to {{ possessive(named) }} HTML.
       </template>
@@ -119,6 +122,10 @@ async function save() {
   .html-bench {
     margin-top: var(--space-5);
     margin-bottom: var(--space-6);
+  }
+
+  .no-preview {
+    color: var(--color-ink-soft);
   }
 }
 </style>

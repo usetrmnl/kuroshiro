@@ -43,7 +43,7 @@ function fakeAssign(faked: Faked) {
   api.use(http.post(apiUrl('plugins/weather/assign'), async ({ request }) => {
     const input = await request.json() as AssignPluginInput
     sent.push(input)
-    const device = [HALLWAY, KITCHEN, STUDY].find(({ id }) => id === input.deviceId)!
+    const device = [HALLWAY, KITCHEN, STUDY].find(({ id }) => id === input.owner.id)!
     const screenId = `weather-on-${device.id}`
     faked.plugin = { ...faked.plugin, assignments: [...faked.plugin.assignments, { deviceId: device.id, deviceName: device.name, screenId, order: 3, screenCount: 3, state: null }] }
     return HttpResponse.json(buildScreen({ id: screenId, deviceId: device.id, order: 3 }), { status: 201 })
@@ -100,7 +100,7 @@ describe('the Devices of a Plugin', () => {
       ['Kitchen', 'Assigned · Order 2 of 6', 'Unassign'],
       ['Study', 'Not assigned', 'Assign to Study'],
     ])
-    expect(sent).toEqual([{ deviceId: 'hallway' }])
+    expect(sent).toEqual([{ owner: { kind: 'device', id: 'hallway' } }])
     expect(screen.getByRole('alertdialog').query()).toBeNull()
     expect(read(document.querySelector('main .plugin-facts'))).toContain('On Kitchen and Hallway')
   })
@@ -133,7 +133,7 @@ describe('the Devices of a Plugin', () => {
     await button(screen, 'Try again').click()
 
     await expect.poll(() => rows()[2]).toEqual(['Study', 'Assigned · Order 3 of 3', 'Unassign'])
-    expect(sent).toEqual([{ deviceId: 'study' }])
+    expect(sent).toEqual([{ owner: { kind: 'device', id: 'study' } }])
   })
 
   it('takes "already assigned" as done and shows the Plugin where the server has it', async () => {

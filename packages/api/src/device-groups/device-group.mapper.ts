@@ -1,14 +1,19 @@
 import type { DeviceGroupMember, DeviceGroup as DeviceGroupRead, DeviceGroupSummary } from 'kuroshiro-shared'
 import type { Device } from '../devices/devices.entity.js'
 import type { DeviceGroup } from './device-group.entity.js'
+import { isProxiedDevice } from '../devices/device-update-rules.js'
 
 function toDeviceGroupMember(device: Device): DeviceGroupMember {
   return {
     id: device.id,
     name: device.name,
     friendlyId: device.friendlyId,
-    deviceModelName: device.deviceModel?.name ?? null,
-    paletteName: device.palette?.name ?? null,
+    deviceModel: device.deviceModel
+      ? { name: device.deviceModel.name, label: device.deviceModel.label, width: device.deviceModel.width, height: device.deviceModel.height, deprecated: device.deviceModel.deprecated }
+      : null,
+    palette: device.palette ? { id: device.palette.id, name: device.palette.name, kind: device.palette.kind } : null,
+    isMirrored: !!device.mirrorEnabled,
+    isProxied: isProxiedDevice(device),
   }
 }
 

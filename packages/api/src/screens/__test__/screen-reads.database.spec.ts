@@ -1,8 +1,10 @@
 import type { ScreenRead } from 'kuroshiro-shared'
 import type { DataSource, DeepPartial } from 'typeorm'
 import type { HttpTestApp } from '../../test/httpApp.js'
+import * as fs from 'node:fs'
+import path from 'node:path'
 import { ConfigService } from '@nestjs/config'
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { Alert } from '../../alerts/entities/alert.entity.js'
 import { Device } from '../../devices/devices.entity.js'
 import { MashupConfiguration } from '../../mashup/entities/mashup-configuration.entity.js'
@@ -16,15 +18,13 @@ import { Schedule } from '../../schedule/schedule.entity.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
 import { asService } from '../../test/mockService.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
-import { fileExists } from '../../utils/fileExists.js'
 import { DeviceScreen } from '../device-screen.entity.js'
 import { DeviceScreensController } from '../device-screens.controller.js'
+import { screenImagePath } from '../screen-image-paths.js'
 import { ScreenReadsService } from '../screen-reads.service.js'
 import { ScreensController } from '../screens.controller.js'
 import { Screen } from '../screens.entity.js'
 import { ScreensService } from '../screens.service.js'
-
-vi.mock('../../utils/fileExists.js', () => ({ fileExists: vi.fn() }))
 
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000'
 const CREATED_AT = new Date('2026-03-01T09:30:00.000Z')
@@ -50,10 +50,13 @@ describe('a Device\'s Screens, GET /api/devices/:id/screens, against a real data
   })
 
   beforeEach(async () => {
-    vi.mocked(fileExists).mockResolvedValue(true)
     await database.getRepository(Plugin).createQueryBuilder().delete().execute()
     await database.getRepository(Device).createQueryBuilder().delete().execute()
     device = await database.getRepository(Device).save({ name: 'Kitchen', friendlyId: 'ABC123', mac: 'AA:BB:CC:DD:EE:01', apikey: 'device-secret', refreshRate: 300 })
+  })
+
+  afterEach(async () => {
+    await fs.promises.rm(path.dirname(screenImagePath(device.id, '')), { recursive: true, force: true })
   })
 
   afterAll(async () => {
@@ -61,10 +64,16 @@ describe('a Device\'s Screens, GET /api/devices/:id/screens, against a real data
     await database.destroy()
   })
 
-  async function addScreen(order: number, overrides: DeepPartial<Screen> & Partial<Pick<DeviceScreen, 'isActive' | 'renderSignal'>> = {}): Promise<Screen> {
-    const { isActive, renderSignal, ...rest } = overrides
+  /** Seeds a Screen with its record and, unless `rendered` is false, its rendered image on disk. */
+  async function addScreen(order: number, overrides: DeepPartial<Screen> & Partial<Pick<DeviceScreen, 'isActive' | 'renderSignal'>> & { rendered?: boolean } = {}): Promise<Screen> {
+    const { isActive, renderSignal, rendered = true, ...rest } = overrides
     const screen = await database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, fetchManual: false, device, ...rest })
     await database.getRepository(DeviceScreen).save({ device, screen, isActive: isActive ?? false, renderSignal: renderSignal ?? null, generatedAt: CREATED_AT })
+    if (rendered) {
+      const image = screenImagePath(device.id, screen.id)
+      await fs.promises.mkdir(path.dirname(image), { recursive: true })
+      await fs.promises.writeFile(image, 'image')
+    }
     return screen
   }
 
@@ -187,8 +196,7 @@ describe('a Device\'s Screens, GET /api/devices/:id/screens, against a real data
   })
 
   it('reads a Screen never rendered without an image or a render time', async () => {
-    vi.mocked(fileExists).mockResolvedValue(false)
-    await addScreen(1)
+    await addScreen(1, { rendered: false })
 
     const [screen] = await readScreens()
 

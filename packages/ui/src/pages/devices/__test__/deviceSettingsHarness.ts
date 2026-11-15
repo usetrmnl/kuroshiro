@@ -1,9 +1,10 @@
-import type { DeviceDetail, DeviceModelRead, FirmwareRead, InstanceFacts, InstanceSettingsResponse, PaletteRead, UpdateDeviceInput } from 'kuroshiro-shared'
+import type { DeviceDetail, DeviceGroupSummary, DeviceModelRead, FirmwareRead, InstanceFacts, InstanceSettingsResponse, PaletteRead, UpdateDeviceInput } from 'kuroshiro-shared'
 import { http, HttpResponse } from 'msw'
 import { expect } from 'vitest'
 import { userEvent } from 'vitest/browser'
 import { api, apiUrl } from '@/testing/api/server'
 import { fakeShellReads, mountApp } from '@/testing/app'
+import { buildDeviceGroupSummary } from '@/testing/fixtures/device-groups'
 import { buildDeviceModel, buildDeviceModelList, buildPalette } from '@/testing/fixtures/device-models'
 import { buildDeviceDetail } from '@/testing/fixtures/devices'
 import { buildFirmware, buildFirmwareList } from '@/testing/fixtures/firmware'
@@ -34,6 +35,11 @@ const FIRMWARE: FirmwareRead[] = [
   buildFirmware({ id: 'fw-retired', version: '1.6.9', compatibleModels: ['og_png', 'og_plus'], deprecated: true }),
 ]
 
+const GROUPS: DeviceGroupSummary[] = [
+  buildDeviceGroupSummary({ id: 'downstairs', name: 'Downstairs', memberCount: 2, screenCount: 3 }),
+  buildDeviceGroupSummary({ id: 'upstairs', name: 'Upstairs', memberCount: 0, screenCount: 1 }),
+]
+
 export const KITCHEN = buildDeviceDetail({
   id: 'kitchen',
   name: 'Kitchen',
@@ -55,10 +61,11 @@ interface Reference {
   models: DeviceModelRead[]
   palettes: PaletteRead[]
   firmware: FirmwareRead[]
+  groups: DeviceGroupSummary[]
 }
 
 /** The Device after a write, as the server would answer it: enough of its rules for the page to follow its own saves. */
-function written(device: DeviceDetail, input: UpdateDeviceInput, { models, palettes, firmware }: Reference): DeviceDetail {
+function written(device: DeviceDetail, input: UpdateDeviceInput, { models, palettes, firmware, groups }: Reference): DeviceDetail {
   const model = models.find(candidate => candidate.name === input.deviceModelName)
   const paletteId = input.paletteId ?? model?.paletteIds[0]
   const palette = palettes.find(candidate => candidate.id === paletteId)
@@ -67,11 +74,13 @@ function written(device: DeviceDetail, input: UpdateDeviceInput, { models, palet
     mac: input.mirrorMac?.toUpperCase() ?? device.mirror.mac,
     apikeySet: device.mirror.apikeySet || input.mirrorApikey !== undefined,
   }
+  const group = input.deviceGroupId == null ? null : groups.find(candidate => candidate.id === input.deviceGroupId)
   return {
     ...device,
     name: input.name ?? device.name,
     refreshRate: input.refreshRate ?? device.refreshRate,
     rotationMode: input.rotationMode ?? device.rotationMode,
+    deviceGroup: input.deviceGroupId === undefined ? device.deviceGroup : group ? { id: group.id, name: group.name } : null,
     deviceModel: model ? { name: model.name, label: model.label, width: model.width, height: model.height, deprecated: model.deprecated } : device.deviceModel,
     palette: palette ? { id: palette.id, name: palette.name, kind: palette.kind } : device.palette,
     sleep: {
@@ -119,12 +128,13 @@ interface Faked {
   models?: DeviceModelRead[]
   palettes?: PaletteRead[]
   firmware?: FirmwareRead[]
+  groups?: DeviceGroupSummary[]
   settings?: InstanceSettingsResponse
   instance?: InstanceFacts
 }
 
 /** Fakes what Kitchen's Settings read and take, with a Device that changes as the server would change it. */
-export function fakeKitchenSettings({ device = KITCHEN, models = MODELS, palettes = PALETTES, firmware = FIRMWARE, settings = buildInstanceSettings(), instance }: Faked = {}): FakedSettings {
+export function fakeKitchenSettings({ device = KITCHEN, models = MODELS, palettes = PALETTES, firmware = FIRMWARE, groups = GROUPS, settings = buildInstanceSettings(), instance }: Faked = {}): FakedSettings {
   const faked: FakedSettings = { device, writes: [], deleted: 0, apikeyRegenerated: 0, sleepImageUploads: [], sleepImageRemoved: 0 }
   let devices = [device]
   freezeTime(NOW)
@@ -138,6 +148,7 @@ export function fakeKitchenSettings({ device = KITCHEN, models = MODELS, palette
     http.get(apiUrl('device-models'), () => HttpResponse.json(buildDeviceModelList({ models }))),
     http.get(apiUrl('device-models/palettes'), () => HttpResponse.json(palettes)),
     http.get(apiUrl('firmware'), () => HttpResponse.json(buildFirmwareList({ firmware }))),
+    http.get(apiUrl('device-groups'), () => HttpResponse.json(groups)),
     http.get(apiUrl('settings'), () => HttpResponse.json(settings)),
     http.patch(apiUrl('devices/kitchen'), async ({ request }) => {
       const input = await request.json() as UpdateDeviceInput
@@ -145,7 +156,7 @@ export function fakeKitchenSettings({ device = KITCHEN, models = MODELS, palette
       await faked.holding
       if (faked.refusing)
         return faked.refusing.clone()
-      faked.device = written(faked.device, input, { models, palettes, firmware })
+      faked.device = written(faked.device, input, { models, palettes, firmware, groups })
       return HttpResponse.json(faked.device)
     }),
     http.delete(apiUrl('devices/kitchen'), () => {

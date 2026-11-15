@@ -1,4 +1,4 @@
-import type { GroupScreen, GroupScreenDeviceState, MashupLayout, MashupSlotRead, RenderSignal, ScheduleRead, ScreenRead, TemplateSize } from 'kuroshiro-shared'
+import type { GroupScreen, GroupScreenDeviceState, MashupLayout, MashupSlotRead, RenderSignal, ScheduleRead, ScreenBody, ScreenRead, TemplateSize } from 'kuroshiro-shared'
 import type { MashupConfiguration } from '../mashup/entities/mashup-configuration.entity.js'
 import type { ScreenStateRead } from '../schedule/rotation.js'
 import type { Schedule } from '../schedule/schedule.entity.js'
@@ -93,8 +93,6 @@ function ditherOf(screen: Screen): boolean {
   }
 }
 
-type ScreenBody = Omit<ScreenRead, 'deviceId' | 'readOnly' | 'state' | 'stateCause' | 'picked' | 'renderSignal' | 'imagePath' | 'renderedAt'>
-
 function toScreenBody(screen: Screen, facts: ScreenBodyFacts): ScreenBody {
   const kind = screen.type
   return {
@@ -133,9 +131,12 @@ export interface MemberFacts {
   renderSignal: RenderSignal | null
   /** `null` when the member has no stored record of the Screen yet. */
   generatedAt: Date | null
+  /** Whether the Screen's image rendered for the member is on disk. */
+  isRendered: boolean
 }
 
-function toGroupScreenDeviceState(facts: MemberFacts): GroupScreenDeviceState {
+function toGroupScreenDeviceState(screenId: string, facts: MemberFacts): GroupScreenDeviceState {
+  const rendered = facts.isRendered && facts.generatedAt
   return {
     deviceId: facts.deviceId,
     isActive: facts.isActive,
@@ -144,9 +145,11 @@ function toGroupScreenDeviceState(facts: MemberFacts): GroupScreenDeviceState {
     picked: facts.state.picked,
     renderSignal: facts.renderSignal,
     generatedAt: toIsoStringOrNull(facts.generatedAt),
+    imagePath: rendered ? toImagePath(screenImageUrlPath(facts.deviceId, screenId), facts.generatedAt!) : null,
+    renderedAt: rendered ? toIsoString(facts.generatedAt!) : null,
   }
 }
 
 export function toGroupScreen(screen: Screen, deviceGroupId: string, facts: ScreenBodyFacts, perDevice: MemberFacts[]): GroupScreen {
-  return { ...toScreenBody(screen, facts), deviceGroupId, perDevice: perDevice.map(toGroupScreenDeviceState) }
+  return { ...toScreenBody(screen, facts), deviceGroupId, perDevice: perDevice.map(member => toGroupScreenDeviceState(screen.id, member)) }
 }

@@ -24,6 +24,7 @@ export const buildDeviceSummary = defineBuilder<DeviceSummary>(() => ({
     paused: false,
     holding: false,
   },
+  deviceGroup: null,
 }))
 
 export const buildDeviceDetail = defineBuilder<DeviceDetail>(() => ({
@@ -38,7 +39,6 @@ export const buildDeviceDetail = defineBuilder<DeviceDetail>(() => ({
   targetFirmware: null,
   pending: { specialFunction: null, deviceReset: false, deviceResetNewApikey: false, wipe: false, firmwarePush: false },
   sleepImagePath: null,
-  deviceGroup: null,
   lastWakeSource: null,
   sensors: [],
   screenCount: 1,

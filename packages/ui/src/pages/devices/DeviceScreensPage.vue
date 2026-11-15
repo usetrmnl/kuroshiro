@@ -7,6 +7,7 @@ import { useLoad } from '@/patterns/useLoad'
 import { useAlerts } from '@/reads/sharedReads'
 import CurrentScreenHero from './CurrentScreenHero.vue'
 import { useDeviceFrame } from './deviceFrame'
+import ParkedScreens from './ParkedScreens.vue'
 import { possessive } from './screenNaming'
 import ScreensInOrder from './ScreensInOrder.vue'
 import ScreensLoading from './ScreensLoading.vue'
@@ -38,6 +39,7 @@ function reload() {
   <template v-if="device.data && screens.data">
     <CurrentScreenHero :device="device.data" :screens="screens.data" :alerts="firingHere" />
     <ScreensInOrder :device="device.data" :screens="screens.data" :reload="screens.reload" />
+    <ParkedScreens v-if="device.data.deviceGroup" :device="device.data" :group="device.data.deviceGroup" />
   </template>
   <ScreensLoading v-else-if="!failure" :device-name="name" :waiting="device.waiting || screens.waiting" :device-model="listed?.deviceModel" />
 </template>

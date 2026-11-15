@@ -146,7 +146,7 @@ describe('add Screen', () => {
       await screen.getByRole('button', { name: 'Add Screen' }).click()
 
       await expect.poll(() => path(screen)).toBe(OPENED_ON_THE_NEW_SCREEN)
-      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'external', deviceId: 'kitchen', name: 'Tide table', url: 'https://tides.example/today.png', fetchManual: true, dither: true } }])
+      expect(faked.writes).toEqual([{ method: 'POST', path: 'screens', body: { kind: 'external', owner: { kind: 'device', id: 'kitchen' }, name: 'Tide table', url: 'https://tides.example/today.png', fetchManual: true, dither: true } }])
       expect(screen.getByRole('alertdialog').elements()).toEqual([])
     })
 
@@ -160,7 +160,7 @@ describe('add Screen', () => {
       await assignPlugin(screen).click()
 
       await expect.poll(() => path(screen)).toBe(OPENED_ON_THE_NEW_SCREEN)
-      expect(faked.writes).toEqual([{ method: 'POST', path: 'plugins/doorbell/assign', body: { deviceId: 'kitchen' } }])
+      expect(faked.writes).toEqual([{ method: 'POST', path: 'plugins/doorbell/assign', body: { owner: { kind: 'device', id: 'kitchen' } } }])
       expect(screen.getByRole('alertdialog').elements()).toEqual([])
       await openedRow(screen, 'Doorbell note')
     })
@@ -176,7 +176,7 @@ describe('add Screen', () => {
       await assignPlugin(screen).click()
 
       await expect.poll(() => path(screen)).toBe(OPENED_ON_THE_NEW_SCREEN)
-      expect(faked.writes).toEqual([{ method: 'POST', path: 'plugins/doorbell/assign', body: { deviceId: 'kitchen' } }])
+      expect(faked.writes).toEqual([{ method: 'POST', path: 'plugins/doorbell/assign', body: { owner: { kind: 'device', id: 'kitchen' } } }])
       await openedRow(screen, 'Doorbell note')
     })
 
@@ -217,7 +217,7 @@ describe('add Screen', () => {
 
       await findPlugin(screen).fill('ti')
       await assignPlugin(screen).click()
-      await expect.poll(() => faked.writes).toEqual([{ method: 'POST', path: 'plugins/Tide table/assign', body: { deviceId: 'kitchen' } }])
+      await expect.poll(() => faked.writes).toEqual([{ method: 'POST', path: 'plugins/Tide table/assign', body: { owner: { kind: 'device', id: 'kitchen' } } }])
     })
 
     it('shows the empty state with both ways to a first Plugin, each carrying the Device', async () => {

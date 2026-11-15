@@ -2,22 +2,23 @@
 import type { AddScreenKind } from './addScreen'
 import { computed, useId } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import Notice from '@/components/Notice.vue'
 import RadioRow from '@/components/RadioRow.vue'
 import BackLink from '@/patterns/BackLink.vue'
 import ChoiceBesideForm from '@/patterns/ChoiceBesideForm.vue'
-import LoadBody from '@/patterns/LoadBody.vue'
+import LoadingLine from '@/patterns/LoadingLine.vue'
 import UnsavedChanges from '@/patterns/UnsavedChanges.vue'
 import { useInstanceFacts } from '@/reads/sharedReads'
 import { chosenKind, offeredKinds } from './addScreen'
 import { provideScreenFormsChanged } from './addScreenChanged'
 import { ADD_SCREEN_KINDS } from './addScreenKinds'
-import { useDeviceFrame } from './deviceFrame'
 import { possessive } from './screenNaming'
+import { useScreenTarget } from './screenTarget'
 
 const route = useRoute()
 const router = useRouter()
 const facts = useInstanceFacts()
-const { device, name, path } = useDeviceFrame()
+const { target, name, path, waiting, failure, reload } = useScreenTarget()
 
 const headingId = useId()
 
@@ -49,11 +50,15 @@ function choose(kind?: AddScreenKind) {
       <template #choice>
         <RadioRow :model-value="chosen.kind" :choices="kinds" aria-label="Kind of Screen" @update:model-value="choose" />
       </template>
-      <LoadBody v-slot="{ data }" :load="device" :loading="`Loading ${name}`" :failed="`Could not load ${name}.`">
-        <KeepAlive>
-          <component :is="chosen.form" :device="data" />
+      <div>
+        <Notice v-if="failure" :title="`Could not load ${name}.`" :reason="failure.reason" action="Try again" @act="reload" />
+        <KeepAlive v-if="target">
+          <component :is="chosen.form" :target="target" />
         </KeepAlive>
-      </LoadBody>
+        <LoadingLine v-else :shown="waiting">
+          Loading {{ name }}
+        </LoadingLine>
+      </div>
     </ChoiceBesideForm>
   </section>
   <UnsavedChanges :when="changed">
