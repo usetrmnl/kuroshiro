@@ -8,9 +8,9 @@ import { CONFIG_SCHEMA_VERSION } from '../schema-version.js'
 import { CONFIG_ARCHIVE_FILES } from '../types.js'
 import { COUNTDOWN_PLUGIN, JOKE_PLUGIN, LOBBY_PICTURE_PNG_BASE64, SHOWCASE_PLUGINS, WEATHER_PLUGIN } from './showcase-content.js'
 
-// One virtual Device, an obviously fake mac no real hardware can share, never polled by anything but the
-// showcase itself. Its apikey is the Redaction Sentinel rather than a fixed value, so Configuration Import
-// mints it a fresh one on every fresh instance (ADR-0028) instead of the same key living in every checkout.
+// Virtual Devices, each with an obviously fake mac no real hardware can share, never polled by anything but the
+// showcase itself. Their apikeys are the Redaction Sentinel rather than a fixed value, so Configuration Import
+// mints each a fresh one on every fresh instance (ADR-0028) instead of the same keys living in every checkout.
 const SHOWCASE_DEVICE_ID = '0ddf7be1-349a-449d-8426-14f907316b13'
 const SHOWCASE_DEVICE_MAC = 'DE:AD:BE:EF:00:01'
 
@@ -47,7 +47,7 @@ function buildDeviceGroups(): DeviceGroupManifestEntry[] {
   return [{ id: LOBBY_GROUP_ID, name: LOBBY_GROUP_NAME }]
 }
 
-function buildDevice(entry: Pick<DeviceManifestEntry, 'id' | 'name' | 'friendlyId' | 'mac' | 'deviceModelName' | 'paletteId'> & { deviceGroupId?: string }): DeviceManifestEntry {
+function buildDevice(entry: Pick<DeviceManifestEntry, 'id' | 'name' | 'friendlyId' | 'mac' | 'deviceModelName' | 'paletteId' | 'deviceGroupId'>): DeviceManifestEntry {
   return {
     ...entry,
     apikey: CONFIGURATION_REDACTION_SENTINEL,

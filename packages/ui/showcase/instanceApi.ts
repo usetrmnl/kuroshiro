@@ -32,8 +32,9 @@ export function instanceApi(baseUrl: string) {
     addFileScreen: (owner: Owner, name: string, png: Uint8Array) => {
       const form = new FormData()
       form.set('kind', 'file')
-      form.set('owner[kind]', ownerOf(owner).kind)
-      form.set('owner[id]', ownerOf(owner).id)
+      const { kind, id } = ownerOf(owner)
+      form.set('owner[kind]', kind)
+      form.set('owner[id]', id)
       form.set('name', name)
       form.set('file', new Blob([new Uint8Array(png)], { type: 'image/png' }), `${name}.png`)
       return call<ScreenRead>('POST', 'screens', form)
