@@ -1,6 +1,7 @@
 import type { ConfigService } from '@nestjs/config'
 import type { DeviceModelsService } from '../../device-models/device-models.service.js'
 import type { Device } from '../../devices/devices.entity.js'
+import type { DeviceScreen } from '../../screens/device-screen.entity.js'
 import type { Screen } from '../../screens/screens.entity.js'
 import type { MockDeviceModelsService } from '../../test/mockDeviceModelsService.js'
 import type { MashupConfiguration } from '../entities/mashup-configuration.entity.js'
@@ -8,7 +9,7 @@ import type { MashupSlot } from '../entities/mashup-slot.entity.js'
 import type { MashupRendererService } from '../services/mashup-renderer.service.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RENDER_FAILED, RENDER_HELD, RENDER_SKIPPED } from '../../screens/render-outcome.js'
-import { makeDevice, makeMashupConfiguration, makeMashupSlot, makePlugin, makeScreen } from '../../test/fixtures.js'
+import { makeDevice, makeDeviceScreen, makeMashupConfiguration, makeMashupSlot, makePlugin, makeScreen } from '../../test/fixtures.js'
 import { createMockDeviceModelsService, primeMockDeviceModelsService } from '../../test/mockDeviceModelsService.js'
 import { asRepository, createMockRepository } from '../../test/mockRepository.js'
 import { asService } from '../../test/mockService.js'
@@ -21,6 +22,7 @@ vi.mock('../../device-models/render-html-to-png.js', () => ({ renderHtmlToPng, r
 describe('screenRenderService', () => {
   let service: ScreenRenderService
   let screenRepo: ReturnType<typeof createMockRepository<Screen>>
+  let deviceScreenRepo: ReturnType<typeof createMockRepository<DeviceScreen>>
   let configService: { get: ReturnType<typeof vi.fn> }
   let deviceModels: MockDeviceModelsService
   let mashupRenderer: { renderMashup: ReturnType<typeof vi.fn> }
@@ -29,6 +31,7 @@ describe('screenRenderService', () => {
 
   beforeEach(() => {
     screenRepo = createMockRepository<Screen>()
+    deviceScreenRepo = createMockRepository<DeviceScreen>()
     configService = { get: vi.fn().mockReturnValue('http://api') }
     deviceModels = createMockDeviceModelsService()
     primeMockDeviceModelsService(deviceModels)
@@ -40,6 +43,7 @@ describe('screenRenderService', () => {
 
     service = new ScreenRenderService(
       asRepository(screenRepo),
+      asRepository(deviceScreenRepo),
       asService<ConfigService>(configService),
       asService<DeviceModelsService>(deviceModels),
       asService<MashupRendererService>(mashupRenderer),
@@ -59,13 +63,12 @@ describe('screenRenderService', () => {
     })
 
     function primeLookups() {
-      screenRepo.findOne.mockImplementation(async options => (
-        options.relations && 'device' in options.relations ? screenWithDevice : screenWithMashup
-      ))
+      deviceScreenRepo.findOne.mockResolvedValue(makeDeviceScreen({ screen: screenWithDevice, device }))
+      screenRepo.findOne.mockResolvedValue(screenWithMashup)
     }
 
     it('does nothing when the Screen no longer exists', async () => {
-      screenRepo.findOne.mockResolvedValue(null)
+      deviceScreenRepo.findOne.mockResolvedValue(null)
 
       await expect(service.renderAfterSave('screen-1')).resolves.toBeUndefined()
 
@@ -79,8 +82,8 @@ describe('screenRenderService', () => {
       await service.renderAfterSave('screen-1')
 
       expect(mashupRenderer.renderMashup).toHaveBeenCalledWith(screenWithMashup.mashupConfiguration, device)
-      expect(screenRepo.update).toHaveBeenCalledWith(
-        { id: 'screen-1' },
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith(
+        { id: 'record-of-screen-1' },
         expect.objectContaining({ cachedPluginOutput: '<div class="mashup">new</div>', renderSignal: null }),
       )
       expect(renderHtmlToPng).toHaveBeenCalled()
@@ -94,7 +97,7 @@ describe('screenRenderService', () => {
     })
 
     it('logs and resolves quietly when the initial lookup throws', async () => {
-      screenRepo.findOne.mockRejectedValue(new Error('db unreachable'))
+      deviceScreenRepo.findOne.mockRejectedValue(new Error('db unreachable'))
 
       await expect(service.renderAfterSave('screen-1')).resolves.toBeUndefined()
     })
@@ -108,12 +111,11 @@ describe('screenRenderService', () => {
         id: 'screen-1',
         type: 'mashup',
         device,
-        cachedPluginOutput: '<div class="mashup">cached</div>',
         mashupConfiguration: makeMashupConfiguration({ id: 'config-1' }),
       })
       screenRepo.findOne.mockResolvedValue(screen)
 
-      const outcome = await service.renderMashupScreen(screen, device, false)
+      const outcome = await service.renderMashupScreen(makeDeviceScreen({ screen, device, cachedPluginOutput: '<div class="mashup">cached</div>' }), device, false)
 
       expect(mashupRenderer.renderMashup).not.toHaveBeenCalled()
       expect(outcome).toBe('http://api/screens/devices/device-1/screen-1.png')
@@ -123,7 +125,7 @@ describe('screenRenderService', () => {
       const screen = makeScreen({ id: 'screen-1', type: 'mashup', device })
       screenRepo.findOne.mockRejectedValue(new Error('boom'))
 
-      expect(await service.renderMashupScreen(screen, device, false)).toBe(RENDER_FAILED)
+      expect(await service.renderMashupScreen(makeDeviceScreen({ screen, device }), device, false)).toBe(RENDER_FAILED)
     })
   })
 
@@ -136,10 +138,10 @@ describe('screenRenderService', () => {
       return makeMashupSlot({ id, order, size: 'view--quadrant', plugin: makePlugin({ id: `${id}-plugin`, name: `Plugin ${id}` }), renderedMarkup: `<p>${id}${raises ? ` raises ${raises}` : ''}</p>`, liveMarkup: null, renderSignal: null, ...overrides })
     }
 
-    function mashupScreen(slots: MashupSlot[]): Screen {
-      const screen = makeScreen({ id: 'screen-1', type: 'mashup', device, cachedPluginOutput: '<div class="mashup">whole page</div>', mashupConfiguration: makeMashupConfiguration({ id: 'config-1', layout: '2x2', slots }) })
+    function mashupScreen(slots: MashupSlot[]): DeviceScreen {
+      const screen = makeScreen({ id: 'screen-1', type: 'mashup', device, mashupConfiguration: makeMashupConfiguration({ id: 'config-1', layout: '2x2', slots }) })
       screenRepo.findOne.mockResolvedValue(screen)
-      return screen
+      return makeDeviceScreen({ screen, device, cachedPluginOutput: '<div class="mashup">whole page</div>' })
     }
 
     /** The whole page raises `wholePage`; a page holding one slot alone raises what that slot's markup names. */
@@ -286,21 +288,21 @@ describe('screenRenderService', () => {
 
     it('reads the slots again once the cached output is written again', async () => {
       const a = slot('a', 0, 'skip')
-      const screen = mashupScreen([a, slot('b', 1, null)])
+      const record = mashupScreen([a, slot('b', 1, null)])
       primeSignals('skip')
-      await service.renderMashupScreen(screen, device, true)
+      await service.renderMashupScreen(record, device, true)
 
-      screen.cachedPluginOutput = null
+      record.cachedPluginOutput = null
       mashupRenderer.renderMashup.mockImplementation(async (mashup: MashupConfiguration) => ({
         html: '<div class="mashup">whole page</div>',
         slots: mashup.slots.map(s => ({ slot: s, markup: `<p>${s.id}</p>` })),
       }))
       primeSignals(null)
 
-      expect(await service.renderMashupScreen(screen, device, true)).toBe(IMAGE)
+      expect(await service.renderMashupScreen(record, device, true)).toBe(IMAGE)
       expect(a.renderSignal).toBeNull()
       expect(a.renderedMarkup).toBe('<p>a</p>')
-      expect(screen.mashupConfiguration!.slotSignalsRead).toBe(false)
+      expect(record.screen.mashupConfiguration!.slotSignalsRead).toBe(false)
     })
   })
 })

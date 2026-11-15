@@ -11,6 +11,7 @@ import { PluginFieldValuesService } from '../../plugins/services/plugin-field-va
 import { Schedule } from '../../schedule/schedule.entity.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
+import { DeviceScreen } from '../device-screen.entity.js'
 import { PickedScreenController } from '../picked-screen.controller.js'
 import { PickedScreenService } from '../picked-screen.service.js'
 import { ScreenReadsService } from '../screen-reads.service.js'
@@ -30,10 +31,10 @@ describe('setting and clearing a Device\'s Picked Screen, against a real databas
     http = await createHttpTestApp({
       controllers: [PickedScreenController],
       providers: [
-        { provide: PickedScreenService, useValue: new PickedScreenService(database.getRepository(Device), database.getRepository(Screen)) },
+        { provide: PickedScreenService, useValue: new PickedScreenService(database.getRepository(Device), database.getRepository(Screen), database.getRepository(DeviceScreen)) },
         {
           provide: ScreenReadsService,
-          useValue: new ScreenReadsService(database.getRepository(Screen), database.getRepository(Device), database.getRepository(Alert), fieldValues),
+          useValue: new ScreenReadsService(database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Device), database.getRepository(Alert), fieldValues),
         },
       ],
     })
@@ -51,9 +52,11 @@ describe('setting and clearing a Device\'s Picked Screen, against a real databas
     await database.destroy()
   })
 
-  async function seedScreen(order: number, overrides: Partial<Screen> & { owner?: Device } = {}): Promise<Screen> {
-    const { owner, ...rest } = overrides
-    return database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, isActive: false, fetchManual: false, generatedAt: new Date(), device: owner ?? device, ...rest })
+  async function seedScreen(order: number, overrides: Partial<Screen> & Partial<Pick<DeviceScreen, 'isActive' | 'renderSignal'>> & { owner?: Device } = {}): Promise<Screen> {
+    const { owner, isActive, renderSignal, ...rest } = overrides
+    const screen = await database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, fetchManual: false, device: owner ?? device, ...rest })
+    await database.getRepository(DeviceScreen).save({ device: owner ?? device, screen, isActive: isActive ?? false, renderSignal: renderSignal ?? null, generatedAt: new Date() })
+    return screen
   }
 
   function send(method: string, deviceId: string, body?: { screenId: string }): Promise<Response> {

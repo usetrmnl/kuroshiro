@@ -1,6 +1,6 @@
 import type { TestingModule } from '@nestjs/testing'
 import type { MashupSlot } from '../../mashup/entities/mashup-slot.entity.js'
-import type { Screen } from '../../screens/screens.entity.js'
+import type { DeviceScreen as DeviceScreenRecord } from '../../screens/device-screen.entity.js'
 import type { HttpTestApp } from '../../test/httpApp.js'
 import type { Plugin } from '../entities/plugin.entity.js'
 import { UnprocessableEntityException } from '@nestjs/common'
@@ -12,8 +12,9 @@ import { createNoSensorsService } from '../../device-sensors/__test__/mockDevice
 import { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
 import { InstanceTimeZone } from '../../instance/instance-time-zone.js'
 import { MashupSlot as MashupSlotEntity } from '../../mashup/entities/mashup-slot.entity.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen as ScreenEntity } from '../../screens/screens.entity.js'
-import { makeMashupConfiguration, makeMashupSlot, makePlugin, makePluginTemplate, makeScreen } from '../../test/fixtures.js'
+import { makeDeviceScreen, makeMashupConfiguration, makeMashupSlot, makePlugin, makePluginTemplate, makeScreen } from '../../test/fixtures.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
 import { createMockDeviceModelsService, primeMockDeviceModelsServiceWithAssignedModels } from '../../test/mockDeviceModelsService.js'
 import { createMockPluginFieldValuesService } from '../../test/mockPluginCollaborators.js'
@@ -41,6 +42,8 @@ function matches(entity: unknown, where: Record<string, unknown>): boolean {
   return Object.entries(where).every(([key, value]) => {
     if (value && typeof value === 'object' && 'id' in value)
       return (record[key] as { id?: unknown } | undefined)?.id === (value as { id: unknown }).id
+    if (value && typeof value === 'object')
+      return matches(record[key] ?? {}, value as Record<string, unknown>)
     return record[key] === value
   })
 }
@@ -49,7 +52,7 @@ describe('webhook ingest integration', () => {
   let ingest: WebhookIngestService
   let module: TestingModule
   let plugin: Plugin
-  let screens: Screen[]
+  let screens: DeviceScreenRecord[]
   let mashupSlots: MashupSlot[]
 
   const template = { layout: 'full', liquidMarkup: 'readings: {{ readings.size }} status: {{ status }}' }
@@ -68,8 +71,8 @@ describe('webhook ingest integration', () => {
     })
 
     screens = [
-      makeScreen({ id: 'screen-1', type: 'plugin', plugin: makePlugin({ id: 'plugin-1' }), cachedPluginOutput: 'stale' }),
-      makeScreen({ id: 'mashup-screen-1', type: 'mashup', cachedPluginOutput: 'stale mashup' }),
+      makeDeviceScreen({ screen: makeScreen({ id: 'screen-1', type: 'plugin', plugin: makePlugin({ id: 'plugin-1' }) }), cachedPluginOutput: 'stale' }),
+      makeDeviceScreen({ screen: makeScreen({ id: 'mashup-screen-1', type: 'mashup' }), cachedPluginOutput: 'stale mashup' }),
     ]
 
     mashupSlots = [
@@ -80,11 +83,14 @@ describe('webhook ingest integration', () => {
       find: vi.fn(async ({ where }: { where: Record<string, unknown> }) => mashupSlots.filter(slot => matches(slot, where))),
     }
 
-    const screenRepo = {
-      find: vi.fn(async ({ where }: { where: Record<string, unknown> }) => screens.filter(screen => matches(screen, where))),
-      update: vi.fn(async (where: string | Record<string, unknown>, partial: Partial<Screen>) => {
-        screens.filter(screen => matches(screen, typeof where === 'string' ? { id: where } : where)).forEach(screen => Object.assign(screen, partial))
+    const deviceScreenRepo = {
+      find: vi.fn(async ({ where }: { where: Record<string, unknown> }) => screens.filter(record => matches(record, where))),
+      update: vi.fn(async (where: string | Record<string, unknown>, partial: Partial<DeviceScreenRecord>) => {
+        screens.filter(record => matches(record, typeof where === 'string' ? { id: where } : where)).forEach(record => Object.assign(record, partial))
       }),
+    }
+
+    const screenRepo = {
       manager: { getRepository: (name: string) => (name === 'MashupSlot' ? mashupSlotRepo : null) },
     }
 
@@ -113,6 +119,7 @@ describe('webhook ingest integration', () => {
         { provide: getRepositoryToken(PluginEntity), useValue: pluginRepo },
         { provide: getRepositoryToken(DevicePlugin), useValue: {} },
         { provide: getRepositoryToken(ScreenEntity), useValue: screenRepo },
+        { provide: getRepositoryToken(DeviceScreen), useValue: deviceScreenRepo },
         { provide: getRepositoryToken(PluginDataSource), useValue: {} },
         { provide: getRepositoryToken(PluginTemplate), useValue: {} },
         { provide: getRepositoryToken(PluginField), useValue: {} },

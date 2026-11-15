@@ -42,6 +42,7 @@ import { asService } from '../../test/mockService.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
 import { convertToPng, downloadImage, readImageSize } from '../../utils/imageUtils.js'
 import { resolveAppPath } from '../../utils/pathHelper.js'
+import { DeviceScreen } from '../device-screen.entity.js'
 import { DeviceScreensController } from '../device-screens.controller.js'
 import { PluginAssignmentsController } from '../plugin-assignments.controller.js'
 import { ScreenReadsService } from '../screen-reads.service.js'
@@ -89,12 +90,13 @@ describe('editing a Screen, against a real database', () => {
         { provide: ConfigService, useValue: asService<ConfigService>(config) },
         {
           provide: ScreenReadsService,
-          useValue: new ScreenReadsService(database.getRepository(Screen), database.getRepository(Device), database.getRepository(Alert), fieldValues),
+          useValue: new ScreenReadsService(database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Device), database.getRepository(Alert), fieldValues),
         },
         {
           provide: ScreensService,
           useValue: new ScreensService(
             database.getRepository(Screen),
+            database.getRepository(DeviceScreen),
             database.getRepository(Device),
             asService<ConfigService>(config),
             asService<DeviceModelsService>(deviceModels),
@@ -116,6 +118,7 @@ describe('editing a Screen, against a real database', () => {
           useValue: new DeviceDisplayService(
             database.getRepository(Device),
             database.getRepository(Screen),
+            database.getRepository(DeviceScreen),
             asService<ConfigService>({ get: () => 'http://api' }),
             asService<DeviceModelsService>(deviceModels),
             asService<FallbackScreensService>(fallbackScreens),
@@ -161,8 +164,12 @@ describe('editing a Screen, against a real database', () => {
     return fs.promises.readdir(deviceFolder()).catch(() => [])
   }
 
-  async function seedScreen(order: number, overrides: DeepPartial<Screen> = {}): Promise<Screen> {
-    return database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, isActive: false, fetchManual: false, generatedAt: CREATED_AT, device, ...overrides })
+  async function seedScreen(order: number, overrides: DeepPartial<Screen> & Partial<Pick<DeviceScreen, 'isActive' | 'renderSignal' | 'cachedPluginOutput'>> = {}): Promise<Screen> {
+    const { isActive, renderSignal, cachedPluginOutput, ...rest } = overrides
+    const owner = (rest.device ?? device) as Device
+    const screen = await database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, fetchManual: false, device, ...rest })
+    await database.getRepository(DeviceScreen).save({ device: owner, screen, isActive: isActive ?? false, renderSignal: renderSignal ?? null, cachedPluginOutput: cachedPluginOutput ?? null, generatedAt: CREATED_AT })
+    return screen
   }
 
   async function seedPlugin(name: string): Promise<Plugin> {
@@ -198,6 +205,11 @@ describe('editing a Screen, against a real database', () => {
 
   async function stored(id: string): Promise<Screen> {
     return database.getRepository(Screen).findOneByOrFail({ id })
+  }
+
+  /** The Device's record of the Screen: what it was last rendered to, and whether it is Active. */
+  async function recordOf(screenId: string): Promise<DeviceScreen> {
+    return database.getRepository(DeviceScreen).findOneByOrFail({ screen: { id: screenId } })
   }
 
   async function seedFiles(screen: Screen): Promise<void> {
@@ -287,7 +299,7 @@ describe('editing a Screen, against a real database', () => {
 
       await patch(screen.id, { html: '<h1>Changed</h1>' })
 
-      expect((await stored(screen.id)).renderSignal).toBeNull()
+      expect((await recordOf(screen.id)).renderSignal).toBeNull()
     })
 
     it('answers the next /display poll with a new filename once an HTML Screen\'s markup changes, so the Device draws the edit', async () => {
@@ -304,7 +316,7 @@ describe('editing a Screen, against a real database', () => {
 
       await patch(screen.id, { html: '<h1>Changed</h1>' })
 
-      expect((await stored(screen.id)).generatedAt.getTime()).toBeGreaterThan(CREATED_AT.getTime())
+      expect((await recordOf(screen.id)).generatedAt.getTime()).toBeGreaterThan(CREATED_AT.getTime())
     })
 
     it('moves an HTML Screen\'s render time when its Dithering flips', async () => {
@@ -312,7 +324,7 @@ describe('editing a Screen, against a real database', () => {
 
       await patch(screen.id, { dither: false })
 
-      expect((await stored(screen.id)).generatedAt.getTime()).toBeGreaterThan(CREATED_AT.getTime())
+      expect((await recordOf(screen.id)).generatedAt.getTime()).toBeGreaterThan(CREATED_AT.getTime())
     })
 
     it('keeps an HTML Screen\'s render time when a save changes neither its markup nor its Dithering', async () => {
@@ -320,7 +332,7 @@ describe('editing a Screen, against a real database', () => {
 
       await patch(screen.id, { name: 'Renamed', html: '<p>Hi</p>', dither: true })
 
-      expect((await stored(screen.id)).generatedAt).toEqual(CREATED_AT)
+      expect((await recordOf(screen.id)).generatedAt).toEqual(CREATED_AT)
     })
 
     it('saves the URL of an External link fetched on every poll without fetching it', async () => {
@@ -414,7 +426,7 @@ describe('editing a Screen, against a real database', () => {
       await patch(second.id, { name: 'Renamed', html: '<p>Changed</p>' })
 
       expect(await orderAndState()).toEqual([['First', 1, 'active'], ['Renamed', 2, 'upNext'], ['Third', 3, null]])
-      expect((await stored(second.id)).isActive).toBe(false)
+      expect((await recordOf(second.id)).isActive).toBe(false)
     })
 
     it('answers 404 screen-not-found for an unknown Screen', async () => {
@@ -446,10 +458,10 @@ describe('editing a Screen, against a real database', () => {
 
       await redrawForRenderTarget()
 
-      for (const screen of [await stored(pluginScreen.id), await stored(mashupScreen.id)]) {
-        expect(screen.generatedAt.getTime()).toBeGreaterThan(CREATED_AT.getTime())
-        expect(screen.cachedPluginOutput).toBeNull()
-        expect(screen.renderSignal).toBeNull()
+      for (const record of [await recordOf(pluginScreen.id), await recordOf(mashupScreen.id)]) {
+        expect(record.generatedAt.getTime()).toBeGreaterThan(CREATED_AT.getTime())
+        expect(record.cachedPluginOutput).toBeNull()
+        expect(record.renderSignal).toBeNull()
       }
     })
 
@@ -460,8 +472,8 @@ describe('editing a Screen, against a real database', () => {
 
       await redrawForRenderTarget()
 
-      expect((await stored(live.id)).generatedAt).toEqual(CREATED_AT)
-      expect(await stored(other.id)).toMatchObject({ generatedAt: CREATED_AT, cachedPluginOutput: '<p>cached</p>' })
+      expect((await recordOf(live.id)).generatedAt).toEqual(CREATED_AT)
+      expect(await recordOf(other.id)).toMatchObject({ generatedAt: CREATED_AT, cachedPluginOutput: '<p>cached</p>' })
     })
   })
 
@@ -638,8 +650,8 @@ describe('editing a Screen, against a real database', () => {
 
       expect(response.status).toBe(200)
       expect(await response.json()).toMatchObject({ id: screen.id, name: 'Board', mashup: { layout: '1Lx1R', slots: [{ pluginName: 'Plugin 1' }, { pluginName: 'Plugin 3' }] } })
-      expect((await stored(screen.id)).cachedPluginOutput).toBeNull()
-      expect((await stored(screen.id)).renderSignal).toBeNull()
+      expect((await recordOf(screen.id)).cachedPluginOutput).toBeNull()
+      expect((await recordOf(screen.id)).renderSignal).toBeNull()
     })
 
     it('changes the layout together with a full slot list', async () => {
@@ -667,7 +679,7 @@ describe('editing a Screen, against a real database', () => {
       expect(await response.json()).toMatchObject({ code: 'validation', fields: [{ path: 'pluginIds' }] })
       const read: ScreenRead = await (await http.request(`/api/devices/${device.id}/screens`)).json().then((screens: ScreenRead[]) => screens[0])
       expect(read.mashup).toMatchObject({ layout: '1Lx1R', slots: [{ pluginName: 'Plugin 1' }, { pluginName: 'Plugin 2' }] })
-      expect((await stored(screen.id)).cachedPluginOutput).toBe('<p>cached</p>')
+      expect((await recordOf(screen.id)).cachedPluginOutput).toBe('<p>cached</p>')
     })
 
     it('answers 404 plugin-not-found for an unknown Plugin and keeps the slots', async () => {

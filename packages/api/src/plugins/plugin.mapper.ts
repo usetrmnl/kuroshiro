@@ -1,4 +1,5 @@
 import type { DataSourceRead, PluginAssignmentRead, PluginDetail, PluginFieldRead, PluginPlace, PluginSummary, PreviewData, PreviewName, PreviewOrigin, ScheduledRenderRead } from 'kuroshiro-shared'
+import type { DeviceScreen } from '../screens/device-screen.entity.js'
 import type { Screen } from '../screens/screens.entity.js'
 import type { PluginDataSource } from './entities/plugin-data-source.entity.js'
 import type { PluginField } from './entities/plugin-field.entity.js'
@@ -24,7 +25,7 @@ export interface PluginFacts {
 
 export interface PluginDetailFacts extends PluginFacts {
   /** Every Screen, in Order and with its Schedule, of each Device the Plugin is assigned to, by Device id. */
-  screensByDevice: ReadonlyMap<string, Screen[]>
+  screensByDevice: ReadonlyMap<string, DeviceScreen[]>
   now: Date
   /** The address the instance is reached at from outside. */
   apiUrl: string
@@ -154,7 +155,7 @@ function toRecipeRead(plugin: Plugin): PluginDetail['recipe'] {
 
 function toAssignmentRead(screen: Screen, facts: PluginDetailFacts): PluginAssignmentRead {
   const { device } = screen
-  const screensInOrder = facts.screensByDevice.get(device.id) ?? [screen]
+  const screensInOrder = facts.screensByDevice.get(device.id) ?? []
   const states = screenStatesOfDevice(device, screensInOrder, facts.now)
   return {
     deviceId: device.id,

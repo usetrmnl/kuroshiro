@@ -393,7 +393,7 @@ describe('configurationExportService', () => {
 
   it('leaves a Screen\'s remembered Render Signal out of screens.json, being runtime state', async () => {
     const device = makeDevice({ id: 'device-1' })
-    const screen = makeScreen({ id: 'screen-1', device, renderSignal: 'skip' })
+    const screen = makeScreen({ id: 'screen-1', device })
     screenRepo.find.mockResolvedValue([screen])
 
     const buffer = await service.exportToZip()

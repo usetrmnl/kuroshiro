@@ -11,6 +11,7 @@ import { PluginFieldValue } from '../../plugins/entities/plugin-field-value.enti
 import { PluginField } from '../../plugins/entities/plugin-field.entity.js'
 import { Plugin } from '../../plugins/entities/plugin.entity.js'
 import { PluginFieldValuesService } from '../../plugins/services/plugin-field-values.service.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { DeviceScreensController } from '../../screens/device-screens.controller.js'
 import { ScreenReadsService } from '../../screens/screen-reads.service.js'
 import { Screen } from '../../screens/screens.entity.js'
@@ -44,6 +45,7 @@ describe('a Mashup\'s image renders right after its save, against a real databas
     mashupRenderer = { renderMashup: vi.fn() }
     const screenRender = new ScreenRenderService(
       database.getRepository(Screen),
+      database.getRepository(DeviceScreen),
       config,
       asService<DeviceModelsService>(deviceModels),
       asService<MashupRendererService>(mashupRenderer),
@@ -59,7 +61,7 @@ describe('a Mashup\'s image renders right after its save, against a real databas
       screenRender,
     )
     const fieldValues = new PluginFieldValuesService(database.getRepository(PluginFieldValue), database.getRepository(PluginField))
-    const screenReads = new ScreenReadsService(database.getRepository(Screen), database.getRepository(Device), database.getRepository(Alert), fieldValues)
+    const screenReads = new ScreenReadsService(database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Device), database.getRepository(Alert), fieldValues)
 
     http = await createHttpTestApp({
       controllers: [MashupController, DeviceScreensController],

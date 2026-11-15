@@ -39,6 +39,7 @@ import { Plugin } from './plugins/entities/plugin.entity.js'
 import { PluginsModule } from './plugins/plugins.module.js'
 import { Schedule } from './schedule/schedule.entity.js'
 import { ScheduleModule } from './schedule/schedule.module.js'
+import { DeviceScreen } from './screens/device-screen.entity.js'
 import { Screen } from './screens/screens.entity.js'
 import { ScreensModule } from './screens/screens.module.js'
 import { InstanceSettings } from './settings/entities/instance-settings.entity.js'
@@ -65,7 +66,7 @@ const conf = config()
       username: conf.database.user,
       password: conf.database.password,
       database: conf.database.database,
-      entities: [Device, DeviceModel, Palette, DeviceSensor, Screen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, MashupConfiguration, MashupSlot, Schedule, Firmware, Alert, InstanceSettings, SyncRun],
+      entities: [Device, DeviceModel, Palette, DeviceSensor, Screen, DeviceScreen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, MashupConfiguration, MashupSlot, Schedule, Firmware, Alert, InstanceSettings, SyncRun],
       migrations: (() => {
         const dir = path.join(process.cwd(), 'dist', 'src', 'migrations')
         if (!fs.existsSync(dir))

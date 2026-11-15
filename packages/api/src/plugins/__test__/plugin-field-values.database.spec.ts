@@ -11,6 +11,7 @@ import { createNoSensorsService } from '../../device-sensors/__test__/mockDevice
 import { Device } from '../../devices/devices.entity.js'
 import { InstanceTimeZone } from '../../instance/instance-time-zone.js'
 import { MashupRendererService } from '../../mashup/services/mashup-renderer.service.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { stubFetch } from '../../test/fetch.js'
 import { createMockDeviceModelsService, primeMockDeviceModelsServiceWithAssignedModels } from '../../test/mockDeviceModelsService.js'
@@ -69,7 +70,7 @@ describe('field values against a real database', () => {
     const config = asService<ConfigService>({ get: () => false })
     const resolver = new PluginDataResolverService(new PluginDataFetcherService(renderer, config, new InstanceTimeZone()), new PluginTransformService())
     const templateContext = new PluginTemplateContextService(fieldValues, resolver, new InstanceTimeZone(), new PluginDataSourceStateService(database.getRepository(PluginDataSource)))
-    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
+    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), database.getRepository(DeviceScreen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
     const refresh = new PluginRefreshService(renderCache, templateContext, new DataSourceFetchOutcomeService(database.getRepository(PluginDataSource)), new PluginDataSourceStateService(database.getRepository(PluginDataSource)), database.getRepository(Plugin))
 
     scheduler = new PluginSchedulerService(refresh)
@@ -85,7 +86,7 @@ describe('field values against a real database', () => {
       fieldValues,
       assignments,
     )
-    pluginReads = new PluginReadsService(database.getRepository(Plugin), database.getRepository(Screen), database.getRepository(Alert), fieldValues, asService<ConfigService>({ getOrThrow: () => 'https://kuroshiro.example' }))
+    pluginReads = new PluginReadsService(database.getRepository(Plugin), database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Alert), fieldValues, asService<ConfigService>({ getOrThrow: () => 'https://kuroshiro.example' }))
     const deviceSensors = asService<DeviceSensorsService>({ findForDevice: async () => [] })
     mashupRenderer = new MashupRendererService(renderer, deviceSensors, templateContext, asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())))
     previewData = new PluginPreviewDataService(database.getRepository(Plugin), database.getRepository(Device), deviceSensors, templateContext, asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())))
@@ -162,8 +163,8 @@ describe('field values against a real database', () => {
   }
 
   async function cachedOutput(pluginId: string): Promise<string | null | undefined> {
-    const screen = await database.getRepository(Screen).findOneOrFail({ where: { plugin: { id: pluginId } } })
-    return screen.cachedPluginOutput
+    const record = await database.getRepository(DeviceScreen).findOneOrFail({ where: { screen: { plugin: { id: pluginId } } } })
+    return record.cachedPluginOutput
   }
 
   async function loadForRender(pluginId: string): Promise<Plugin> {

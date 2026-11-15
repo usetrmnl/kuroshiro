@@ -8,6 +8,7 @@ import { Repository } from 'typeorm'
 import { Device } from '../devices/devices.entity.js'
 import { ApiException, ValidationException } from '../errors/api.exception.js'
 import { Plugin } from '../plugins/entities/plugin.entity.js'
+import { DeviceScreen } from '../screens/device-screen.entity.js'
 import { joinEndOfOrder } from '../screens/screen-order.js'
 import { Screen } from '../screens/screens.entity.js'
 import { MASHUP_LAYOUT_CONFIG } from './constants/layouts.js'
@@ -69,7 +70,7 @@ export class MashupService {
       await slots.remove(configuration.slots)
       await configurations.update({ id: configuration.id }, { layout })
       await this.buildSlots(layoutConfig, plugins, configuration, slots)
-      await manager.getRepository(Screen).update({ id: screenId }, { cachedPluginOutput: null, renderSignal: null })
+      await manager.getRepository(DeviceScreen).update({ screen: { id: screenId } }, { cachedPluginOutput: null, renderSignal: null })
     })
     this.logger.log(`Mashup updated: ${screenId}`)
     void this.screenRender.renderAfterSave(screenId)

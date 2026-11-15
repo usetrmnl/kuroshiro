@@ -6,7 +6,8 @@ import { Device } from '../devices/devices.entity.js'
 import { nextRotationAt } from '../devices/next-poll.js'
 import { ApiException } from '../errors/api.exception.js'
 import { isPassedOver } from '../schedule/rotation.js'
-import { gatingRenderSignalOf } from './screen-states.js'
+import { DeviceScreen } from './device-screen.entity.js'
+import { rotationScreenOf } from './screen-states.js'
 import { Screen } from './screens.entity.js'
 
 /**
@@ -23,6 +24,8 @@ export class PickedScreenService {
     private readonly deviceRepository: Repository<Device>,
     @InjectRepository(Screen)
     private readonly screenRepository: Repository<Screen>,
+    @InjectRepository(DeviceScreen)
+    private readonly deviceScreenRepository: Repository<DeviceScreen>,
   ) {}
 
   /** Refused with a 4xx when the Screen belongs to another Device, the Device has no Rotation to pick in, the Screen is already Active, or Rotation could not show it at the next poll. */
@@ -33,9 +36,10 @@ export class PickedScreenService {
       throw new ApiException(HttpStatus.BAD_REQUEST, 'picked-screen-wrong-device', 'That Screen does not belong to this Device.', { deviceId, screenId })
     if (device.mirrorEnabled)
       throw new ApiException(HttpStatus.CONFLICT, 'picked-screen-mirrored', 'A mirrored Device has no Rotation to pick in.', { deviceId })
-    if (screen.isActive)
+    const record = await this.deviceScreenRepository.findOneOrFail({ where: { device: { id: device.id }, screen: { id: screen.id } }, relations: { screen: { schedule: true } } })
+    if (record.isActive)
       throw new ApiException(HttpStatus.CONFLICT, 'picked-screen-active', 'The Active Screen cannot be picked.', { screenId })
-    if (isPassedOver({ id: screen.id, isActive: screen.isActive, schedule: screen.schedule, renderSignal: gatingRenderSignalOf(screen) }, nextRotationAt(device, new Date())))
+    if (isPassedOver(rotationScreenOf(record), nextRotationAt(device, new Date())))
       throw new ApiException(HttpStatus.CONFLICT, 'picked-screen-ineligible', 'Rotation could not show that Screen at the next poll.', { screenId })
 
     // TypeORM's QueryDeepPartialEntity can't infer through Screen's own relations
@@ -61,7 +65,7 @@ export class PickedScreenService {
 
   private async screenOrRefuse(screenId: string): Promise<Screen> {
     const screen = isUUID(screenId)
-      ? await this.screenRepository.findOne({ where: { id: screenId }, relations: { device: true, schedule: true } })
+      ? await this.screenRepository.findOne({ where: { id: screenId }, relations: { device: true } })
       : null
     if (!screen)
       throw new ApiException(HttpStatus.NOT_FOUND, 'screen-not-found', 'Screen not found', { id: screenId })

@@ -12,6 +12,7 @@ import { Palette } from '../../device-models/entities/palette.entity.js'
 import { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
 import { DeviceSensor } from '../../device-sensors/entities/device-sensor.entity.js'
 import { Firmware } from '../../firmware/entities/firmware.entity.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
 import { BW, createMockDeviceModelsService, createMockPaletteSelectionService, GRAY_4, GRAY_16, OG_PLUS, V2 } from '../../test/mockDeviceModelsService.js'
@@ -54,7 +55,7 @@ describe('the Device write and delete against a real database', () => {
     http = await createHttpTestApp({
       controllers: [DevicesController],
       providers: [
-        { provide: DeviceReadsService, useValue: new DeviceReadsService(devices, database.getRepository(Screen), deviceSensors) },
+        { provide: DeviceReadsService, useValue: new DeviceReadsService(devices, database.getRepository(Screen), database.getRepository(DeviceScreen), deviceSensors) },
         { provide: DevicesService, useValue: new DevicesService(devices, asService<DeviceModelsService>(deviceModels), asService<PaletteSelectionService>(paletteSelection), firmware, asService<ScreensService>({ redrawForRenderTarget }), asService<DeviceSleepImageService>({ reconvert: reconvertSleepImage })) },
       ],
     })

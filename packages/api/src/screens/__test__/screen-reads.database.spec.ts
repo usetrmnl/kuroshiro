@@ -17,6 +17,7 @@ import { createHttpTestApp } from '../../test/httpApp.js'
 import { asService } from '../../test/mockService.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
 import { fileExists } from '../../utils/fileExists.js'
+import { DeviceScreen } from '../device-screen.entity.js'
 import { DeviceScreensController } from '../device-screens.controller.js'
 import { ScreenReadsService } from '../screen-reads.service.js'
 import { ScreensController } from '../screens.controller.js'
@@ -36,7 +37,7 @@ describe('a Device\'s Screens, GET /api/devices/:id/screens, against a real data
   beforeAll(async () => {
     database = await createTestDatabase()
     const fieldValues = new PluginFieldValuesService(database.getRepository(PluginFieldValue), database.getRepository(PluginField))
-    const screenReads = new ScreenReadsService(database.getRepository(Screen), database.getRepository(Device), database.getRepository(Alert), fieldValues)
+    const screenReads = new ScreenReadsService(database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Device), database.getRepository(Alert), fieldValues)
 
     http = await createHttpTestApp({
       controllers: [DeviceScreensController, ScreensController],
@@ -60,8 +61,11 @@ describe('a Device\'s Screens, GET /api/devices/:id/screens, against a real data
     await database.destroy()
   })
 
-  async function addScreen(order: number, overrides: DeepPartial<Screen> = {}): Promise<Screen> {
-    return database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, isActive: false, fetchManual: false, generatedAt: CREATED_AT, device, ...overrides })
+  async function addScreen(order: number, overrides: DeepPartial<Screen> & Partial<Pick<DeviceScreen, 'isActive' | 'renderSignal'>> = {}): Promise<Screen> {
+    const { isActive, renderSignal, ...rest } = overrides
+    const screen = await database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, fetchManual: false, device, ...rest })
+    await database.getRepository(DeviceScreen).save({ device, screen, isActive: isActive ?? false, renderSignal: renderSignal ?? null, generatedAt: CREATED_AT })
+    return screen
   }
 
   async function addSchedule(screen: Screen, overrides: DeepPartial<Schedule>): Promise<Schedule> {

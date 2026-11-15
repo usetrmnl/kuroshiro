@@ -13,6 +13,7 @@ import type { PluginField } from '../plugins/entities/plugin-field.entity.js'
 import type { PluginTemplate } from '../plugins/entities/plugin-template.entity.js'
 import type { Plugin } from '../plugins/entities/plugin.entity.js'
 import type { Schedule } from '../schedule/schedule.entity.js'
+import type { DeviceScreen } from '../screens/device-screen.entity.js'
 import type { Screen } from '../screens/screens.entity.js'
 
 const FIXED_DATE = new Date('2026-01-01T00:00:00.000Z')
@@ -46,10 +47,21 @@ export function makeScreen(overrides: Partial<Screen> = {}): Screen {
     type: 'file',
     fetchManual: false,
     dither: true,
-    isActive: false,
     order: 0,
-    generatedAt: FIXED_DATE,
     device: makeDevice(),
+    ...overrides,
+  }
+}
+
+/** The Device's record of a Screen; the Screen is the one it belongs to, so `makeDeviceScreen({ screen: makeScreen(...) })` for any other. */
+export function makeDeviceScreen(overrides: Partial<DeviceScreen> = {}): DeviceScreen {
+  const screen = overrides.screen ?? makeScreen()
+  return {
+    id: `record-of-${screen.id}`,
+    isActive: false,
+    generatedAt: FIXED_DATE,
+    device: screen.device,
+    screen,
     ...overrides,
   }
 }

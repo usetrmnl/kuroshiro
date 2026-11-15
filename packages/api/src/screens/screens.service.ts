@@ -11,7 +11,7 @@ import { BadRequestException, HttpStatus, Injectable, Logger } from '@nestjs/com
 import { ConfigService } from '@nestjs/config'
 import { InjectRepository } from '@nestjs/typeorm'
 import { isUUID } from 'class-validator'
-import { In, Repository } from 'typeorm'
+import { Repository } from 'typeorm'
 import { DeviceModelsService } from '../device-models/device-models.service.js'
 import { Device } from '../devices/devices.entity.js'
 import { ApiException, ValidationException } from '../errors/api.exception.js'
@@ -19,11 +19,12 @@ import { DevicePlugin } from '../plugins/entities/device-plugin.entity.js'
 import { fileExists } from '../utils/fileExists.js'
 import { getErrorMessage } from '../utils/getErrorMessage.js'
 import { convertToPng, downloadImage, readImageSize } from '../utils/imageUtils.js'
-import { resolveAppPath } from '../utils/pathHelper.js'
 import { assertPublicUrl, requesterFor } from '../utils/ssrfGuard.js'
 import { assertUploadAllowed, deleteFileIfExists, refusingUnreadableImage, stageUpload, writeUpload } from '../utils/stagedImageUpload.js'
+import { DeviceScreen } from './device-screen.entity.js'
 import { CreateScreenDto } from './dto/create-screen.dto.js'
 import { UpdateScreenDto } from './dto/update-screen.dto.js'
+import { originalImagePath, screenImagePath } from './screen-image-paths.js'
 import { closeGapInOrder, joinEndOfOrder, writeOrder } from './screen-order.js'
 import { Screen } from './screens.entity.js'
 
@@ -37,6 +38,12 @@ const EDITABLE_FIELDS: Record<Screen['type'], ReadonlyArray<keyof UpdateScreenDt
   plugin: [],
 }
 
+/** An External link's own columns as edited, and whether its kept image was fetched again for them. */
+interface ExternalLinkChange {
+  columns: QueryDeepPartialEntity<Screen>
+  fetched: boolean
+}
+
 /** The Screens drawn from markup at poll time, which a new render target leaves with no stored image to convert. */
 const RENDERED_SCREEN_TYPES: ReadonlyArray<Screen['type']> = ['html', 'plugin', 'mashup']
 
@@ -46,6 +53,8 @@ export class ScreensService {
   constructor(
     @InjectRepository(Screen)
     private screensRepository: Repository<Screen>,
+    @InjectRepository(DeviceScreen)
+    private deviceScreensRepository: Repository<DeviceScreen>,
     @InjectRepository(Device)
     private devicesRepository: Repository<Device>,
     private readonly configService: ConfigService,
@@ -103,17 +112,32 @@ export class ScreensService {
     const screen = await this.findScreenWithDevice(id)
     this.assertFieldsBelongToKind(screen, input)
 
-    const changes: QueryDeepPartialEntity<Screen> = {
-      ...(input.name !== undefined && { filename: input.name }),
-      ...(input.html !== undefined && { html: input.html, renderSignal: null }),
-      ...(input.dither !== undefined && { dither: input.dither }),
-      ...(screen.type === 'external' && await this.changeExternalLink(screen, input)),
-      ...(this.changesHtmlRender(screen, input) && { generatedAt: new Date() }),
-    }
+    const external = screen.type === 'external' ? await this.changeExternalLink(screen, input) : null
+    const changes = this.screenChanges(input, external)
+    const rendered = this.recordChanges(screen, input, external)
     if (Object.keys(changes).length > 0)
       await this.screensRepository.update({ id }, changes)
-    await this.reconvertForDither(screen, input, changes)
+    if (Object.keys(rendered).length > 0)
+      await this.updateRecord(screen, rendered)
+    await this.reconvertForDither(screen, input, { fetchManual: changes.fetchManual as boolean | undefined, regenerated: rendered.generatedAt !== undefined })
     return id
+  }
+
+  private screenChanges(input: UpdateScreenDto, external: ExternalLinkChange | null): QueryDeepPartialEntity<Screen> {
+    return {
+      ...(input.name !== undefined && { filename: input.name }),
+      ...(input.html !== undefined && { html: input.html }),
+      ...(input.dither !== undefined && { dither: input.dither }),
+      ...external?.columns,
+    }
+  }
+
+  /** What the edit does to the Device's record of the Screen: an edited HTML drops the remembered Render Signal, and a new render or fetch moves the render time. */
+  private recordChanges(screen: Screen, input: UpdateScreenDto, external: ExternalLinkChange | null): QueryDeepPartialEntity<DeviceScreen> {
+    return {
+      ...(input.html !== undefined && { renderSignal: null }),
+      ...((external?.fetched || this.changesHtmlRender(screen, input)) && { generatedAt: new Date() }),
+    }
   }
 
   /** Whether the edit changes what an HTML Screen renders to; `/display` names the image after `generatedAt`, and the Device redraws only on a new name. */
@@ -123,21 +147,21 @@ export class ScreensService {
   }
 
   /** A flip of Dithering converts a File Screen's stored image, or an External link's kept one, again from its retained original, unless the change fetched a new one. */
-  private async reconvertForDither(screen: Screen, input: UpdateScreenDto, changes: QueryDeepPartialEntity<Screen>): Promise<void> {
+  private async reconvertForDither(screen: Screen, input: UpdateScreenDto, changes: { fetchManual?: boolean, regenerated: boolean }): Promise<void> {
     const kept = screen.type === 'file' || (screen.type === 'external' && (changes.fetchManual ?? screen.fetchManual))
-    if (input.dither === undefined || input.dither === screen.dither || changes.generatedAt || !kept)
+    if (input.dither === undefined || input.dither === screen.dither || changes.regenerated || !kept)
       return
     await this.reconvertScreen(screen.device, await this.deviceModels.renderTargetFor(screen.device), { ...screen, dither: input.dither })
   }
 
   /** The columns of an External link's own fields, its kept image fetched first when the URL or the choice to keep it changed. */
-  private async changeExternalLink(screen: Screen, input: UpdateScreenDto): Promise<QueryDeepPartialEntity<Screen>> {
+  private async changeExternalLink(screen: Screen, input: UpdateScreenDto): Promise<ExternalLinkChange> {
     const url = input.url ?? screen.externalLink!
     const fetchManual = input.fetchManual ?? screen.fetchManual
     const needsFetch = fetchManual && (url !== screen.externalLink || !screen.fetchManual)
     if (needsFetch)
       await this.stageImage(screen.device, screen.id).store(staged => this.fetchKeptImage(screen.device, url, staged, input.dither ?? screen.dither))
-    return { externalLink: url, fetchManual, ...(needsFetch && { generatedAt: new Date() }) }
+    return { columns: { externalLink: url, fetchManual }, fetched: needsFetch }
   }
 
   private assertFieldsBelongToKind(screen: Screen, input: UpdateScreenDto): void {
@@ -165,7 +189,8 @@ export class ScreensService {
     this.logger.log(`Replacing the image of screen ${id}`)
     const screen = await this.findFileScreen(id, file)
     const facts = await this.stageImage(screen.device, id).store(staged => this.convertUpload(screen.device, file!, staged, screen.dither))
-    await this.screensRepository.update({ id }, { ...facts, generatedAt: new Date() })
+    await this.screensRepository.update({ id }, facts)
+    await this.updateRecord(screen, { generatedAt: new Date() })
     return id
   }
 
@@ -179,7 +204,7 @@ export class ScreensService {
 
   /** Where an image is written before it replaces the stored one, so a failed fetch or conversion leaves the stored one alone. */
   private stageImage(device: Device, screenId: string) {
-    return stageUpload(this.originalImagePath(device.id, screenId), this.screenImagePath(device.id, screenId), this.logger)
+    return stageUpload(originalImagePath(device.id, screenId), screenImagePath(device.id, screenId), this.logger)
   }
 
   private async fetchKeptImage(device: Device, url: string, staged: StagedImagePaths, dither: boolean): Promise<void> {
@@ -257,7 +282,7 @@ export class ScreensService {
     if (screen.type !== 'external' || !screen.fetchManual)
       throw new BadRequestException('Only an External link that keeps its image can be refreshed.')
     await this.stageImage(screen.device, id).store(staged => this.fetchKeptImage(screen.device, screen.externalLink!, staged, screen.dither))
-    await this.screensRepository.update({ id }, { generatedAt: new Date() })
+    await this.updateRecord(screen, { generatedAt: new Date() })
     return id
   }
 
@@ -276,10 +301,11 @@ export class ScreensService {
 
   /** Drops what the HTML, Plugin and Mashup Screens of a device were rendered to, so the next poll renders them afresh under a new filename. */
   private async discardRenders(device: Device): Promise<void> {
-    await this.screensRepository.update(
-      { device: { id: device.id }, type: In(RENDERED_SCREEN_TYPES) },
-      { generatedAt: new Date(), cachedPluginOutput: null, renderSignal: null },
-    )
+    await this.deviceScreensRepository.createQueryBuilder()
+      .update()
+      .set({ generatedAt: new Date(), cachedPluginOutput: null, renderSignal: null })
+      .where(`"deviceId" = :deviceId AND "screenId" IN (SELECT "id" FROM "screen" WHERE "type" IN (:...types))`, { deviceId: device.id, types: RENDERED_SCREEN_TYPES })
+      .execute()
   }
 
   private async reconvertImageScreens(device: Device): Promise<number> {
@@ -296,8 +322,8 @@ export class ScreensService {
 
   /** Converts one Screen's image again for the target, with the Screen's own Dithering; `false` when there was nothing to convert or it failed. */
   private async reconvertScreen(device: Device, target: DeviceRenderTarget, screen: Screen): Promise<boolean> {
-    const outputPath = this.screenImagePath(device.id, screen.id)
-    const originalPath = this.originalImagePath(device.id, screen.id)
+    const outputPath = screenImagePath(device.id, screen.id)
+    const originalPath = originalImagePath(device.id, screen.id)
     const sourcePath = await fileExists(originalPath) ? originalPath : outputPath
     if (!await fileExists(sourcePath)) {
       this.logger.warn(`No image to reconvert for screen ${screen.id}`)
@@ -307,7 +333,7 @@ export class ScreensService {
     try {
       await convertToPng(sourcePath, tempPath, target, this.logger, { dither: screen.dither })
       await fs.promises.rename(tempPath, outputPath)
-      await this.screensRepository.update({ id: screen.id }, { generatedAt: new Date() })
+      await this.deviceScreensRepository.update({ device: { id: device.id }, screen: { id: screen.id } }, { generatedAt: new Date() })
       return true
     }
     catch (err) {
@@ -315,6 +341,11 @@ export class ScreensService {
       await fs.promises.unlink(tempPath).catch(() => {})
       return false
     }
+  }
+
+  /** Writes the Device's record of the Screen, the Device being the one that owns the Screen. */
+  private async updateRecord(screen: Screen, values: QueryDeepPartialEntity<DeviceScreen>): Promise<void> {
+    await this.deviceScreensRepository.update({ device: { id: screen.device.id }, screen: { id: screen.id } }, values)
   }
 
   private async findScreenWithDevice(id: string): Promise<Screen> {
@@ -325,15 +356,7 @@ export class ScreensService {
   }
 
   private async deleteImages(deviceId: string, screenId: string): Promise<void> {
-    await deleteFileIfExists(this.screenImagePath(deviceId, screenId), this.logger)
-    await deleteFileIfExists(this.originalImagePath(deviceId, screenId), this.logger)
-  }
-
-  private screenImagePath(deviceId: string, screenId: string): string {
-    return resolveAppPath('public', 'screens', 'devices', deviceId, `${screenId}.png`)
-  }
-
-  private originalImagePath(deviceId: string, screenId: string): string {
-    return resolveAppPath('public', 'screens', 'devices', deviceId, `${screenId}.original`)
+    await deleteFileIfExists(screenImagePath(deviceId, screenId), this.logger)
+    await deleteFileIfExists(originalImagePath(deviceId, screenId), this.logger)
   }
 }

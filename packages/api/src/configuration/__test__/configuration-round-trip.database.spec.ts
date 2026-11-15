@@ -69,15 +69,15 @@ describe('a whole Instance, through Configuration Export and Import, against a r
     await database.getRepository(PluginField).save({ plugin, keyname: 'town', fieldType: 'string', name: 'Town', order: 1 })
     const device = await database.getRepository(Device).save({ name: 'Kitchen', friendlyId: 'ABC123', mac: 'AA:BB:CC:DD:EE:01', apikey: 'device-secret', refreshRate: 300, rotationMode: 'manual', palette, targetFirmware: firmware })
     const assignment = await database.getRepository(DevicePlugin).save({ device, plugin, order: 1, isActive: true })
-    const pluginScreen = await database.getRepository(Screen).save({ device, type: 'plugin', order: 1, plugin, devicePluginId: assignment.id, generatedAt: new Date() })
+    const pluginScreen = await database.getRepository(Screen).save({ device, type: 'plugin', order: 1, plugin, devicePluginId: assignment.id })
     await database.getRepository(Schedule).save({ screen: pluginScreen, enabled: true, weekdays: [1, 2, 3], startTime: '08:00:00', endTime: '18:00:00' })
-    const mashupScreen = await database.getRepository(Screen).save({ device, type: 'mashup', order: 2, generatedAt: new Date() })
+    const mashupScreen = await database.getRepository(Screen).save({ device, type: 'mashup', order: 2 })
     const mashup = await database.getRepository(MashupConfiguration).save({ screen: mashupScreen, layout: '1Lx1R' })
     await database.getRepository(MashupSlot).save([
       { mashupConfiguration: mashup, plugin, position: 'left', size: 'half_vertical', order: 1 },
       { mashupConfiguration: mashup, plugin, position: 'right', size: 'half_vertical', order: 2 },
     ])
-    await database.getRepository(Screen).save({ device, type: 'html', order: 3, html: '<p>Hi</p>', generatedAt: new Date() })
+    await database.getRepository(Screen).save({ device, type: 'html', order: 3, html: '<p>Hi</p>' })
   }
 
   async function carriedIds(): Promise<Record<string, string[]>> {

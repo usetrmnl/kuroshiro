@@ -7,6 +7,7 @@ import { Device } from '../../devices/devices.entity.js'
 import { PluginFieldValue } from '../../plugins/entities/plugin-field-value.entity.js'
 import { PluginField } from '../../plugins/entities/plugin-field.entity.js'
 import { PluginFieldValuesService } from '../../plugins/services/plugin-field-values.service.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { ScreenReadsService } from '../../screens/screen-reads.service.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
@@ -31,7 +32,7 @@ describe('writing a Screen\'s Schedule, against a real database', () => {
       providers: [
         {
           provide: ScreenReadsService,
-          useValue: new ScreenReadsService(database.getRepository(Screen), database.getRepository(Device), database.getRepository(Alert), fieldValues),
+          useValue: new ScreenReadsService(database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Device), database.getRepository(Alert), fieldValues),
         },
         { provide: ScheduleService, useValue: new ScheduleService(database.getRepository(Schedule), database.getRepository(Screen)) },
       ],
@@ -49,7 +50,9 @@ describe('writing a Screen\'s Schedule, against a real database', () => {
   })
 
   async function seedScreen(order: number, isActive = false): Promise<Screen> {
-    return database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, isActive, fetchManual: false, generatedAt: new Date(), device })
+    const screen = await database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, fetchManual: false, device })
+    await database.getRepository(DeviceScreen).save({ device, screen, isActive, generatedAt: new Date() })
+    return screen
   }
 
   /** The Active Screen and, after it, the Screen whose Schedule is written. */

@@ -10,6 +10,7 @@ import { Device } from '../../devices/devices.entity.js'
 import { PluginDataSource } from '../../plugins/entities/plugin-data-source.entity.js'
 import { Plugin } from '../../plugins/entities/plugin.entity.js'
 import { PluginImporterService } from '../../plugins/services/plugin-importer.service.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { createHttpTestApp } from '../../test/httpApp.js'
 import { createMockDeviceModelsService, primeMockDeviceModelsService } from '../../test/mockDeviceModelsService.js'
 import { asService } from '../../test/mockService.js'
@@ -223,6 +224,16 @@ describe('reading and importing a Configuration Archive, against a real database
     expect(await imported.json() as ConfigurationImportSummary).toEqual({ created: check.adds, updated: check.overwrites, warnings: check.warnings })
     expect(writeFile).toHaveBeenCalledWith(expect.stringContaining(`${PHOTO_SCREEN}.png`), Buffer.from('png-bytes'))
     expect(await database.getRepository(Device).countBy({})).toBe(2)
+  })
+
+  it('writes the Device\'s record of each imported Screen, not the Active Screen and not rendered yet', async () => {
+    const imported = await http.request('/api/config/import', upload(redactedArchive()))
+    expect(imported.status).toBe(201)
+
+    const [record] = await database.getRepository(DeviceScreen).find({ relations: { device: true, screen: true } })
+
+    expect(record).toMatchObject({ isActive: false, cachedPluginOutput: null, renderSignal: null, screen: { id: PHOTO_SCREEN } })
+    expect(record.generatedAt).toBeInstanceOf(Date)
   })
 
   it('counts a Device re-attached by its MAC address as overwritten, under the id it has here', async () => {

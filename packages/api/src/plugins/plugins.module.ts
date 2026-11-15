@@ -6,6 +6,7 @@ import { DeviceModelsModule } from '../device-models/device-models.module.js'
 import { DeviceSensorsModule } from '../device-sensors/device-sensors.module.js'
 import { Device } from '../devices/devices.entity.js'
 import { InstanceModule } from '../instance/instance.module.js'
+import { DeviceScreen } from '../screens/device-screen.entity.js'
 import { Screen } from '../screens/screens.entity.js'
 import { DevicePlugin } from './entities/device-plugin.entity.js'
 import { PluginDataSource } from './entities/plugin-data-source.entity.js'
@@ -55,6 +56,7 @@ import { WebhookIngestController } from './webhook-ingest.controller.js'
       PluginField,
       PluginFieldValue,
       Screen,
+      DeviceScreen,
       Device,
       Alert,
     ]),

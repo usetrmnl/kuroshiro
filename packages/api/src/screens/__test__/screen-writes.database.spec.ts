@@ -35,9 +35,11 @@ import { asService } from '../../test/mockService.js'
 import { createTestDatabase } from '../../test/testDatabase.js'
 import { convertToPng, downloadImage, readImageSize } from '../../utils/imageUtils.js'
 import { resolveAppPath } from '../../utils/pathHelper.js'
+import { DeviceScreen } from '../device-screen.entity.js'
 import { DeviceScreensController } from '../device-screens.controller.js'
 import { PluginAssignmentsController } from '../plugin-assignments.controller.js'
 import { ScreenReadsService } from '../screen-reads.service.js'
+import { rotationScreensOf } from '../screen-states.js'
 import { ScreensController } from '../screens.controller.js'
 import { Screen } from '../screens.entity.js'
 import { ScreensService } from '../screens.service.js'
@@ -83,12 +85,13 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
         { provide: ConfigService, useValue: asService<ConfigService>(config) },
         {
           provide: ScreenReadsService,
-          useValue: new ScreenReadsService(database.getRepository(Screen), database.getRepository(Device), database.getRepository(Alert), fieldValues),
+          useValue: new ScreenReadsService(database.getRepository(Screen), database.getRepository(DeviceScreen), database.getRepository(Device), database.getRepository(Alert), fieldValues),
         },
         {
           provide: ScreensService,
           useValue: new ScreensService(
             database.getRepository(Screen),
+            database.getRepository(DeviceScreen),
             database.getRepository(Device),
             asService<ConfigService>(config),
             asService<DeviceModelsService>(deviceModels),
@@ -140,8 +143,11 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
     return fs.promises.readdir(deviceFolder()).catch(() => [])
   }
 
-  async function seedScreen(order: number, overrides: DeepPartial<Screen> = {}): Promise<Screen> {
-    return database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, isActive: false, fetchManual: false, generatedAt: CREATED_AT, device, ...overrides })
+  async function seedScreen(order: number, overrides: DeepPartial<Screen> & Partial<Pick<DeviceScreen, 'isActive'>> = {}): Promise<Screen> {
+    const { isActive, ...rest } = overrides
+    const screen = await database.getRepository(Screen).save({ type: 'html', filename: `Screen ${order}`, html: '<p>Hi</p>', order, fetchManual: false, device, ...rest })
+    await database.getRepository(DeviceScreen).save({ device, screen, isActive: isActive ?? false, generatedAt: CREATED_AT })
+    return screen
   }
 
   async function seedPlugin(name: string): Promise<Plugin> {
@@ -218,9 +224,9 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
       const response = await add()
 
       expect(response.status).toBe(201)
-      const stored = await database.getRepository(Screen).find({ where: { device: { id: device.id } } })
-      expect(stored.map(screen => [screen.order, screen.isActive])).toEqual([[1, false]])
-      expect(nextEligibleScreen(stored, new Date())?.id).toBe(stored[0].id)
+      const stored = await database.getRepository(DeviceScreen).find({ where: { device: { id: device.id } }, relations: { screen: true } })
+      expect(stored.map(record => [record.screen.order, record.isActive])).toEqual([[1, false]])
+      expect(nextEligibleScreen(rotationScreensOf(stored), new Date())?.id).toBe(stored[0].screen.id)
     })
   })
 
@@ -492,7 +498,8 @@ describe('adding, deleting and reordering a Device\'s Screens, against a real da
       findAssignment.mockImplementationOnce(async () => {
         // The other request's full assign(), landing between this one's check and its own write.
         const assignment = await database.getRepository(DevicePlugin).save({ plugin: { id: plugin.id }, device: { id: device.id } })
-        await database.getRepository(Screen).save({ type: 'plugin', devicePluginId: assignment.id, order: 1, isActive: false, fetchManual: false, generatedAt: CREATED_AT, device, plugin })
+        const screen = await database.getRepository(Screen).save({ type: 'plugin', devicePluginId: assignment.id, order: 1, fetchManual: false, device, plugin })
+        await database.getRepository(DeviceScreen).save({ device, screen, isActive: false, generatedAt: CREATED_AT })
         return null
       })
 

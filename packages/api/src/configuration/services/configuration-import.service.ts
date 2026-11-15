@@ -50,6 +50,7 @@ import { isOAuthKeyname, NO_REFRESHED_TOKEN } from '../../plugins/plugin-oauth.j
 import { PluginImporterService } from '../../plugins/services/plugin-importer.service.js'
 import { PluginSchedulerService } from '../../plugins/services/plugin-scheduler.service.js'
 import { Schedule } from '../../schedule/schedule.entity.js'
+import { DeviceScreen } from '../../screens/device-screen.entity.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { INSTANCE_SETTINGS_ID, InstanceSettings } from '../../settings/entities/instance-settings.entity.js'
 import { settingViolation } from '../../settings/setting-violation.js'
@@ -167,6 +168,7 @@ interface TransactionRepos {
   devicePlugin: Repository<DevicePlugin>
   fieldValue: Repository<PluginFieldValue>
   screen: Repository<Screen>
+  deviceScreen: Repository<DeviceScreen>
   schedule: Repository<Schedule>
   mashupConfig: Repository<MashupConfiguration>
   mashupSlot: Repository<MashupSlot>
@@ -359,6 +361,7 @@ export class ConfigurationImportService {
       devicePlugin: manager.getRepository(DevicePlugin),
       fieldValue: manager.getRepository(PluginFieldValue),
       screen: manager.getRepository(Screen),
+      deviceScreen: manager.getRepository(DeviceScreen),
       schedule: manager.getRepository(Schedule),
       mashupConfig: manager.getRepository(MashupConfiguration),
       mashupSlot: manager.getRepository(MashupSlot),
@@ -1029,12 +1032,10 @@ export class ConfigurationImportService {
     screen.fileUploadedAt = toDateOrNull(entry.fileUploadedAt)
     screen.plugin = entry.pluginId ? ({ id: entry.pluginId } as Plugin) : null
     screen.devicePluginId = entry.devicePluginId
-    // The restored Screen's render is stale until the next poll recomputes it (ADR-0021).
-    screen.isActive = false
-    screen.generatedAt = new Date()
-    screen.cachedPluginOutput = null
-    screen.renderSignal = null
     const saved = await repos.screen.save(screen)
+    // The restored Screen's render is stale until the next poll recomputes it (ADR-0021): its record starts over.
+    await repos.deviceScreen.delete({ screen: { id: saved.id } })
+    await repos.deviceScreen.insert({ device: { id: deviceId }, screen: { id: saved.id }, isActive: false, generatedAt: new Date(), cachedPluginOutput: null, renderSignal: null })
     this.bump(run, 'screens', !existing)
     return saved
   }

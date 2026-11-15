@@ -9,6 +9,7 @@ import type { MashupSlot } from '../../mashup/entities/mashup-slot.entity.js'
 import type { MashupRendererService } from '../../mashup/services/mashup-renderer.service.js'
 import type { PluginRendererService } from '../../plugins/services/plugin-renderer.service.js'
 import type { Schedule } from '../../schedule/schedule.entity.js'
+import type { DeviceScreen } from '../../screens/device-screen.entity.js'
 import type { Screen } from '../../screens/screens.entity.js'
 import type { MockDeviceModelsService, MockFallbackScreensService } from '../../test/mockDeviceModelsService.js'
 import type { Device } from '../devices.entity.js'
@@ -24,7 +25,7 @@ import { closeSharedBrowser } from '../../device-models/shared-browser.js'
 import { createMockDeviceSensorsService, primeMockDeviceSensorsService } from '../../device-sensors/__test__/mockDeviceSensorsService.js'
 import { ScreenRenderService } from '../../mashup/services/screen-render.service.js'
 import { jsonResponse, stubFetch } from '../../test/fetch.js'
-import { makeDevice, makeDeviceSensor, makeFirmware, makeMashupConfiguration, makeMashupSlot, makePlugin, makePluginDataSource, makePluginTemplate, makeSchedule, makeScreen } from '../../test/fixtures.js'
+import { makeDevice, makeDeviceScreen, makeDeviceSensor, makeFirmware, makeMashupConfiguration, makeMashupSlot, makePlugin, makePluginDataSource, makePluginTemplate, makeSchedule, makeScreen } from '../../test/fixtures.js'
 import { createMockDeviceModelsService, createMockFallbackScreensService, GRAY_4, GRAY_16, OG_PLUS, primeMockDeviceModelsService, primeMockFallbackScreensService, V2 } from '../../test/mockDeviceModelsService.js'
 import { createPluginTemplateContextService } from '../../test/mockPluginCollaborators.js'
 import { asRepository, createMockRepository } from '../../test/mockRepository.js'
@@ -35,6 +36,22 @@ import { fetchPublic } from '../../utils/ssrfGuard.js'
 import { Display } from '../display.js'
 import { DeviceDisplayService } from '../display.service.js'
 import { DisplayScreen } from '../displayScreen.js'
+
+type RecordFields = Partial<Pick<DeviceScreen, 'isActive' | 'generatedAt' | 'cachedPluginOutput' | 'renderSignal'>>
+
+/** A Device's record of a Screen, built from one flat bag of the Screen's fields and the record's own four. */
+function makeRecord(overrides: Partial<Screen> & RecordFields = {}): DeviceScreen {
+  const { isActive, generatedAt, cachedPluginOutput, renderSignal, ...screenFields } = overrides
+  const screen = makeScreen(screenFields)
+  const recordFields = { isActive, generatedAt, cachedPluginOutput, renderSignal }
+  return makeDeviceScreen({ screen, device: screen.device, ...Object.fromEntries(Object.entries(recordFields).filter(([, value]) => value !== undefined)) })
+}
+
+/** The record and its Screen as one flat bag, for building a sibling that differs in a few fields. */
+function flat(record: DeviceScreen): Partial<Screen> & RecordFields {
+  const { isActive, generatedAt, cachedPluginOutput, renderSignal } = record
+  return { ...record.screen, isActive, generatedAt, cachedPluginOutput, renderSignal }
+}
 
 const { fileExists, fileModifiedAt, puppeteerPage, puppeteerLaunch } = vi.hoisted(() => ({
   fileExists: vi.fn(),
@@ -101,6 +118,7 @@ describe('deviceDisplayService', () => {
   let screenRender: ScreenRenderService
   let deviceRepo: ReturnType<typeof createMockRepository<Device>>
   let screenRepo: ReturnType<typeof createMockRepository<Screen>>
+  let deviceScreenRepo: ReturnType<typeof createMockRepository<DeviceScreen>>
   let configService: { get: ReturnType<typeof vi.fn> }
   let deviceModels: MockDeviceModelsService
   let fallbackScreens: MockFallbackScreensService
@@ -111,6 +129,7 @@ describe('deviceDisplayService', () => {
     await closeSharedBrowser()
     deviceRepo = createMockRepository<Device>()
     screenRepo = createMockRepository<Screen>()
+    deviceScreenRepo = createMockRepository<DeviceScreen>()
     configService = { get: vi.fn() }
     deviceModels = createMockDeviceModelsService()
     fallbackScreens = createMockFallbackScreensService()
@@ -118,6 +137,7 @@ describe('deviceDisplayService', () => {
     deviceSensors = createMockDeviceSensorsService()
     screenRender = new ScreenRenderService(
       asRepository(screenRepo),
+      asRepository(deviceScreenRepo),
       asService<ConfigService>(configService),
       asService<DeviceModelsService>(deviceModels),
       asService<MashupRendererService>({}),
@@ -127,6 +147,7 @@ describe('deviceDisplayService', () => {
     service = new DeviceDisplayService(
       asRepository(deviceRepo),
       asRepository(screenRepo),
+      asRepository(deviceScreenRepo),
       asService<ConfigService>(configService),
       asService<DeviceModelsService>(deviceModels),
       asService<FallbackScreensService>(fallbackScreens),
@@ -171,8 +192,8 @@ describe('deviceDisplayService', () => {
 
     beforeEach(() => {
       deviceRepo.findOneBy.mockResolvedValue(makeDevice({ ...baseDevice, apikey: secret, deviceModel: OG_PLUS }))
-      screenRepo.find.mockResolvedValue([])
-      screenRepo.findOneBy.mockResolvedValue(null)
+      deviceScreenRepo.find.mockResolvedValue([])
+      deviceScreenRepo.findOne.mockResolvedValue(null)
       configService.get.mockReturnValue('http://api')
     })
 
@@ -203,7 +224,7 @@ describe('deviceDisplayService', () => {
 
   describe('device report handling', () => {
     beforeEach(() => {
-      screenRepo.find.mockResolvedValue([])
+      deviceScreenRepo.find.mockResolvedValue([])
       configService.get.mockReturnValue('http://api')
     })
 
@@ -254,7 +275,7 @@ describe('deviceDisplayService', () => {
 
   describe('sensor ingestion', () => {
     beforeEach(() => {
-      screenRepo.find.mockResolvedValue([])
+      deviceScreenRepo.find.mockResolvedValue([])
       configService.get.mockReturnValue('http://api')
     })
 
@@ -278,13 +299,12 @@ describe('deviceDisplayService', () => {
   })
 
   describe('rendering in the device model shell', () => {
-    function primeRotation(nextScreenOverrides: Partial<Screen>, device: Device) {
-      const activeScreen = makeScreen({ id: 'screen1', order: 1, device, isActive: true })
-      const nextScreen = makeScreen({ device, ...nextScreenOverrides })
+    function primeRotation(nextScreenOverrides: Partial<Screen> & RecordFields, device: Device) {
+      const activeScreen = makeRecord({ id: 'screen1', order: 1, device, isActive: true })
+      const nextScreen = makeRecord({ device, ...nextScreenOverrides })
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
-      screenRepo.findOne.mockResolvedValue(nextScreen)
-      screenRepo.save.mockResolvedValue(nextScreen)
+      deviceScreenRepo.find.mockResolvedValue([activeScreen, nextScreen])
+      screenRepo.findOne.mockResolvedValue(nextScreen.screen)
       configService.get.mockReturnValue('http://api')
       return nextScreen
     }
@@ -450,7 +470,7 @@ describe('deviceDisplayService', () => {
 
       await service.getCurrentImage(headers)
 
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen2' }, expect.objectContaining({ cachedPluginOutput: '<b>1</b>' }))
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen2' }, expect.objectContaining({ cachedPluginOutput: '<b>1</b>' }))
       const html: string = puppeteerPage.setContent.mock.calls[0][0]
       expect(html).toContain('<div class="view view--full"><b>1</b></div>')
     })
@@ -525,7 +545,7 @@ describe('deviceDisplayService', () => {
 
   it('returns default no screen image if the device has no screens and is not mirrored', async () => {
     deviceRepo.findOneBy.mockResolvedValue(makeDevice({ ...baseDevice, apikey: 'token' }))
-    screenRepo.find.mockResolvedValue([])
+    deviceScreenRepo.find.mockResolvedValue([])
     configService.get.mockReturnValue('http://api')
     const result = await service.getCurrentImage(headers)
     expect(result).toBeInstanceOf(Display)
@@ -538,11 +558,10 @@ describe('deviceDisplayService', () => {
     const filename = 'file.png'
     const generatedAt = new Date()
     const dynamicFilename = `${filename}_${generatedAt.toISOString()}`
-    const activeScreen = makeScreen({ id: 'screen1', order: 1, device, isActive: true, fetchManual: false, externalLink: null, filename, generatedAt })
-    const nextScreen = makeScreen({ ...activeScreen, id: 'screen2', order: 2, isActive: false })
+    const activeScreen = makeRecord({ id: 'screen1', order: 1, device, isActive: true, fetchManual: false, externalLink: null, filename, generatedAt })
+    const nextScreen = makeRecord({ ...flat(activeScreen), id: 'screen2', order: 2, isActive: false })
     deviceRepo.findOneBy.mockResolvedValue(device)
-    screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
-    screenRepo.save.mockResolvedValue(nextScreen)
+    deviceScreenRepo.find.mockResolvedValue([activeScreen, nextScreen])
     configService.get.mockReturnValue('http://api')
     fileExists.mockResolvedValue(true)
     const result = await service.getCurrentImage(headers)
@@ -553,7 +572,7 @@ describe('deviceDisplayService', () => {
 
   it('processes external link images when fetchManual is false', async () => {
     const device = makeDevice({ ...baseDevice, apikey: 'token', id: '1', mirrorEnabled: false })
-    const activeScreen = makeScreen({
+    const activeScreen = makeRecord({
       id: 'screen1',
       order: 1,
       device,
@@ -562,10 +581,10 @@ describe('deviceDisplayService', () => {
       fetchManual: false,
       filename: 'test.png',
     })
-    const nextScreen = makeScreen({ ...activeScreen, id: 'screen2', order: 2, isActive: false })
+    const nextScreen = makeRecord({ ...flat(activeScreen), id: 'screen2', order: 2, isActive: false })
 
     deviceRepo.findOneBy.mockResolvedValue(device)
-    screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
+    deviceScreenRepo.find.mockResolvedValue([activeScreen, nextScreen])
     configService.get.mockReturnValue('http://api')
 
     const result = await service.getCurrentImage(headers)
@@ -577,9 +596,9 @@ describe('deviceDisplayService', () => {
   describe('the request an External link Screen\'s image is fetched with', () => {
     function pollExternalLink(demoMode: boolean) {
       const device = makeDevice({ ...baseDevice, apikey: 'token', id: '1', mirrorEnabled: false })
-      const activeScreen = makeScreen({ id: 'screen1', order: 1, device, isActive: true, externalLink: 'http://169.254.169.254/latest/meta-data/', fetchManual: false, filename: 'test.png' })
+      const activeScreen = makeRecord({ id: 'screen1', order: 1, device, isActive: true, externalLink: 'http://169.254.169.254/latest/meta-data/', fetchManual: false, filename: 'test.png' })
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue([activeScreen, makeScreen({ ...activeScreen, id: 'screen2', order: 2, isActive: false })])
+      deviceScreenRepo.find.mockResolvedValue([activeScreen, makeRecord({ ...flat(activeScreen), id: 'screen2', order: 2, isActive: false })])
       configService.get.mockImplementation((key: string) => key === 'demo_mode' ? demoMode : 'http://api')
       return service.getCurrentImage(headers)
     }
@@ -772,14 +791,14 @@ describe('deviceDisplayService', () => {
   describe('special function acknowledgement and protocol fields', () => {
     function primeNoScreen(device: Device) {
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue([])
+      deviceScreenRepo.find.mockResolvedValue([])
       configService.get.mockReturnValue('http://api')
     }
 
     function primeCycling(device: Device) {
-      const activeScreen = makeScreen({ id: 'screen1', order: 1, device, isActive: true, fetchManual: false, externalLink: null, filename: 'file.png' })
+      const activeScreen = makeRecord({ id: 'screen1', order: 1, device, isActive: true, fetchManual: false, externalLink: null, filename: 'file.png' })
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue([activeScreen, makeScreen({ ...activeScreen, id: 'screen2', order: 2, isActive: false })])
+      deviceScreenRepo.find.mockResolvedValue([activeScreen, makeRecord({ ...flat(activeScreen), id: 'screen2', order: 2, isActive: false })])
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(true)
     }
@@ -882,14 +901,14 @@ describe('deviceDisplayService', () => {
   describe('reset device delivery', () => {
     function primeNoScreen(device: Device) {
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue([])
+      deviceScreenRepo.find.mockResolvedValue([])
       configService.get.mockReturnValue('http://api')
     }
 
     function primeCycling(device: Device) {
-      const activeScreen = makeScreen({ id: 'screen1', order: 1, device, isActive: true, fetchManual: false, externalLink: null, filename: 'file.png' })
+      const activeScreen = makeRecord({ id: 'screen1', order: 1, device, isActive: true, fetchManual: false, externalLink: null, filename: 'file.png' })
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue([activeScreen, makeScreen({ ...activeScreen, id: 'screen2', order: 2, isActive: false })])
+      deviceScreenRepo.find.mockResolvedValue([activeScreen, makeRecord({ ...flat(activeScreen), id: 'screen2', order: 2, isActive: false })])
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(true)
     }
@@ -1002,11 +1021,11 @@ describe('deviceDisplayService', () => {
 
     function primeCycling(device: Device) {
       const screens = [
-        makeScreen({ id: 'screen1', order: 1, device, isActive: true, fetchManual: false, externalLink: null, filename: 'file.png' }),
-        makeScreen({ id: 'screen2', order: 2, device, isActive: false, fetchManual: false, externalLink: null, filename: 'file.png' }),
+        makeRecord({ id: 'screen1', order: 1, device, isActive: true, fetchManual: false, externalLink: null, filename: 'file.png' }),
+        makeRecord({ id: 'screen2', order: 2, device, isActive: false, fetchManual: false, externalLink: null, filename: 'file.png' }),
       ]
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue(screens)
+      deviceScreenRepo.find.mockResolvedValue(screens)
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(true)
     }
@@ -1028,11 +1047,11 @@ describe('deviceDisplayService', () => {
 
       await service.getCurrentImage(headers)
 
-      expect(screenRepo.update).not.toHaveBeenCalled()
+      expect(deviceScreenRepo.update).not.toHaveBeenCalled()
     })
 
     it('keeps a Picked Screen for the poll after the Wipe', async () => {
-      const picked = makeScreen({ id: 'screen2', order: 2, isActive: false, fetchManual: false, externalLink: null, filename: 'file.png' })
+      const picked = makeScreen({ id: 'screen2', order: 2, fetchManual: false, externalLink: null, filename: 'file.png' })
       const device = makeDevice({ ...baseDevice, deviceModel: OG_PLUS, wipe: true, pickedScreen: picked })
       primeCycling(device)
 
@@ -1124,7 +1143,7 @@ describe('deviceDisplayService', () => {
 
     function primeNoScreen(device: Device) {
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue([])
+      deviceScreenRepo.find.mockResolvedValue([])
       configService.get.mockReturnValue('http://api')
     }
 
@@ -1190,9 +1209,9 @@ describe('deviceDisplayService', () => {
   describe('a poll whose answer cannot be made', () => {
     const targetFirmware = makeFirmware({ id: 'fw-1', version: '1.5.6', checksum: 'abc123' })
 
-    function primeFailingNoScreen(device: Device, screens: Screen[] = []) {
+    function primeFailingNoScreen(device: Device, screens: DeviceScreen[] = []) {
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue(screens)
+      deviceScreenRepo.find.mockResolvedValue(screens)
       configService.get.mockReturnValue('http://api')
       firmwareService.verifyChecksum.mockResolvedValue(true)
       firmwareService.fileUrl.mockReturnValue('http://api/firmware/fw-1.bin')
@@ -1231,12 +1250,12 @@ describe('deviceDisplayService', () => {
     })
 
     it('keeps the Active Screen', async () => {
-      const active = makeScreen({ id: 'screen1', order: 1, isActive: true, schedule: makeSchedule({ enabled: false }) })
+      const active = makeRecord({ id: 'screen1', order: 1, isActive: true, schedule: makeSchedule({ enabled: false }) })
       primeFailingNoScreen(makeDevice({ ...baseDevice, deviceModel: OG_PLUS }), [active])
 
       await expect(service.getCurrentImage(headers)).rejects.toThrow('Chromium crashed')
 
-      expect(screenRepo.update).not.toHaveBeenCalled()
+      expect(deviceScreenRepo.update).not.toHaveBeenCalled()
     })
 
     it('clears a Special Function and an OTA push only while the row still holds what this poll fired', async () => {
@@ -1272,7 +1291,7 @@ describe('deviceDisplayService', () => {
 
     it('returns default no screen image if no active screen and not mirrored', async () => {
       deviceRepo.findOneBy.mockResolvedValue(makeDevice({ ...baseDevice, apikey: 'token' }))
-      screenRepo.findOneBy.mockResolvedValue(null)
+      deviceScreenRepo.findOne.mockResolvedValue(null)
       configService.get.mockReturnValue('http://api')
 
       const result = await service.getCurrentImageWithoutProgressing(headers)
@@ -1343,7 +1362,7 @@ describe('deviceDisplayService', () => {
 
     it('returns active screen image if not mirrored', async () => {
       const device = makeDevice({ ...baseDevice, apikey: 'token', id: '1', mirrorEnabled: false })
-      const activeScreen = makeScreen({
+      const activeScreen = makeRecord({
         id: 'screen1',
         device,
         filename: 'test.png',
@@ -1351,20 +1370,20 @@ describe('deviceDisplayService', () => {
       })
 
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.findOneBy.mockResolvedValue(activeScreen)
+      deviceScreenRepo.findOne.mockResolvedValue(activeScreen)
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(true)
 
       const result = await service.getCurrentImageWithoutProgressing(headers)
       expect(result).toBeInstanceOf(DisplayScreen)
-      expect(result.filename).toBe(`${activeScreen.filename}_${activeScreen.generatedAt.toISOString()}`)
+      expect(result.filename).toBe(`${activeScreen.screen.filename}_${activeScreen.generatedAt.toISOString()}`)
       expect(result.image_url).toBe(`http://api/screens/devices/1/screen1.png`)
       expect(result.rendered_at).toBe(activeScreen.generatedAt)
     })
 
     it('generates the screen image on demand if it is missing on disk', async () => {
       const device = makeDevice({ ...baseDevice, apikey: 'token', id: '1', width: 800, height: 480, mirrorEnabled: false })
-      const activeScreen = makeScreen({
+      const activeScreen = makeRecord({
         id: 'screen1',
         device,
         filename: 'test.png',
@@ -1374,7 +1393,7 @@ describe('deviceDisplayService', () => {
       })
 
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.findOneBy.mockResolvedValue(activeScreen)
+      deviceScreenRepo.findOne.mockResolvedValue(activeScreen)
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(false)
 
@@ -1389,7 +1408,7 @@ describe('deviceDisplayService', () => {
 
     it('returns error image if the screen image is missing and cannot be regenerated', async () => {
       const device = makeDevice({ ...baseDevice, apikey: 'token', id: '1', mirrorEnabled: false })
-      const activeScreen = makeScreen({
+      const activeScreen = makeRecord({
         id: 'screen1',
         device,
         type: 'file',
@@ -1398,7 +1417,7 @@ describe('deviceDisplayService', () => {
       })
 
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.findOneBy.mockResolvedValue(activeScreen)
+      deviceScreenRepo.findOne.mockResolvedValue(activeScreen)
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(false)
 
@@ -1411,7 +1430,7 @@ describe('deviceDisplayService', () => {
     it('returns fresh generation metadata after on-demand generation', async () => {
       const device = makeDevice({ ...baseDevice, apikey: 'token', id: '1', width: 800, height: 480, mirrorEnabled: false })
       const staleDate = new Date('2026-01-01T00:00:00.000Z')
-      const activeScreen = makeScreen({
+      const activeScreen = makeRecord({
         id: 'screen1',
         device,
         filename: 'test.png',
@@ -1422,7 +1441,7 @@ describe('deviceDisplayService', () => {
       })
 
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.findOneBy.mockResolvedValue(activeScreen)
+      deviceScreenRepo.findOne.mockResolvedValue(activeScreen)
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(false)
 
@@ -1450,7 +1469,7 @@ describe('deviceDisplayService', () => {
         ],
       })
 
-      const activeScreen = makeScreen({
+      const activeScreen = makeRecord({
         id: 'screen1',
         type: 'file',
         filename: 'First',
@@ -1459,7 +1478,7 @@ describe('deviceDisplayService', () => {
         device,
       })
 
-      const nextScreenBase = makeScreen({
+      const nextScreenBase = makeRecord({
         id: 'screen2',
         type: 'mashup',
         filename: 'Dashboard',
@@ -1470,9 +1489,8 @@ describe('deviceDisplayService', () => {
 
       deviceRepo.findOneBy.mockResolvedValue(device)
       deviceRepo.save.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue([activeScreen, nextScreenBase])
-      screenRepo.findOne.mockResolvedValue({ ...nextScreenBase, mashupConfiguration: mashupConfig })
-      screenRepo.save.mockResolvedValue({ ...nextScreenBase, isActive: true })
+      deviceScreenRepo.find.mockResolvedValue([activeScreen, nextScreenBase])
+      screenRepo.findOne.mockResolvedValue({ ...nextScreenBase.screen, mashupConfiguration: mashupConfig })
       configService.get.mockReturnValue('http://api')
 
       const mockMashupRenderer = {
@@ -1488,8 +1506,8 @@ describe('deviceDisplayService', () => {
 
     it('should handle mashup with cached output', async () => {
       const device = makeDevice({ ...baseDevice, width: 800, height: 480, apikey: 'token' })
-      const activeScreen = makeScreen({ id: 'screen1', isActive: true, order: 1, device })
-      const nextScreen = makeScreen({
+      const activeScreen = makeRecord({ id: 'screen1', isActive: true, order: 1, device })
+      const nextScreen = makeRecord({
         id: 'screen2',
         type: 'mashup',
         filename: 'Dashboard',
@@ -1502,9 +1520,8 @@ describe('deviceDisplayService', () => {
 
       deviceRepo.findOneBy.mockResolvedValue(device)
       deviceRepo.save.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
-      screenRepo.findOne.mockResolvedValue(nextScreen)
-      screenRepo.save.mockResolvedValue(nextScreen)
+      deviceScreenRepo.find.mockResolvedValue([activeScreen, nextScreen])
+      screenRepo.findOne.mockResolvedValue(nextScreen.screen)
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(true)
 
@@ -1516,8 +1533,8 @@ describe('deviceDisplayService', () => {
 
     it('should fallback to error.png if mashup rendering fails', async () => {
       const device = makeDevice({ ...baseDevice, width: 800, height: 480, apikey: 'token' })
-      const activeScreen = makeScreen({ id: 'screen1', isActive: true, order: 1, device })
-      const nextScreen = makeScreen({
+      const activeScreen = makeRecord({ id: 'screen1', isActive: true, order: 1, device })
+      const nextScreen = makeRecord({
         id: 'screen2',
         type: 'mashup',
         filename: 'Dashboard',
@@ -1529,9 +1546,8 @@ describe('deviceDisplayService', () => {
 
       deviceRepo.findOneBy.mockResolvedValue(device)
       deviceRepo.save.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue([activeScreen, nextScreen])
-      screenRepo.findOne.mockResolvedValue(nextScreen)
-      screenRepo.save.mockResolvedValue(nextScreen)
+      deviceScreenRepo.find.mockResolvedValue([activeScreen, nextScreen])
+      screenRepo.findOne.mockResolvedValue(nextScreen.screen)
       configService.get.mockReturnValue('http://api')
 
       const mockMashupRenderer = {
@@ -1550,9 +1566,9 @@ describe('deviceDisplayService', () => {
   describe('schedule-gated rotation', () => {
     const scheduledDevice = makeDevice({ ...baseDevice, apikey: 'token', id: '1', mirrorEnabled: false })
 
-    function screen(overrides: Partial<Omit<Screen, 'schedule'>> & { schedule?: Partial<Schedule> | null } = {}): Screen {
+    function screen(overrides: Partial<Omit<Screen, 'schedule'>> & RecordFields & { schedule?: Partial<Schedule> | null } = {}): DeviceScreen {
       const { schedule, ...rest } = overrides
-      return makeScreen({
+      return makeRecord({
         device: scheduledDevice,
         type: 'file',
         isActive: false,
@@ -1565,9 +1581,9 @@ describe('deviceDisplayService', () => {
       })
     }
 
-    function primeRotation(screens: Screen[]) {
+    function primeRotation(screens: DeviceScreen[]) {
       deviceRepo.findOneBy.mockResolvedValue(scheduledDevice)
-      screenRepo.find.mockResolvedValue(screens)
+      deviceScreenRepo.find.mockResolvedValue(screens)
       screenRepo.findOne.mockResolvedValue(null)
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(true)
@@ -1593,7 +1609,7 @@ describe('deviceDisplayService', () => {
       const result = await service.getCurrentImage(headers)
 
       expect(result.image_url).toBe('http://api/screens/devices/1/screen3.png')
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen3' }, expect.objectContaining({ isActive: true }))
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen3' }, expect.objectContaining({ isActive: true }))
     })
 
     it('wraps past the end of the rotation to reach an eligible screen', async () => {
@@ -1634,8 +1650,8 @@ describe('deviceDisplayService', () => {
       expect(result).toBeInstanceOf(Display)
       expect(result.filename).toBe('noScreen.png')
       expect(result.image_url).toBe('http://api/screens/noScreen.png')
-      expect(screenRepo.update).toHaveBeenCalledWith({ device: { id: '1' } }, { isActive: false })
-      expect(screenRepo.save).not.toHaveBeenCalled()
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ device: { id: '1' } }, { isActive: false })
+      expect(deviceScreenRepo.save).not.toHaveBeenCalled()
     })
 
     it('resumes the rotation once a screen becomes eligible again, without an active screen to advance from', async () => {
@@ -1647,7 +1663,7 @@ describe('deviceDisplayService', () => {
       const result = await service.getCurrentImage(headers)
 
       expect(result.image_url).toBe('http://api/screens/devices/1/screen1.png')
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen1' }, expect.objectContaining({ isActive: true }))
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen1' }, expect.objectContaining({ isActive: true }))
     })
 
     it('keeps a screen out of the rotation while its daily window is closed', async () => {
@@ -1693,9 +1709,9 @@ describe('deviceDisplayService', () => {
   describe('picked screen rotation', () => {
     const pickedScreenDevice = makeDevice({ ...baseDevice, apikey: 'token', id: '1', mirrorEnabled: false })
 
-    function fileScreen(overrides: Partial<Omit<Screen, 'schedule'>> & { schedule?: Partial<Schedule> | null } = {}): Screen {
+    function fileScreen(overrides: Partial<Omit<Screen, 'schedule'>> & RecordFields & { schedule?: Partial<Schedule> | null } = {}): DeviceScreen {
       const { schedule, ...rest } = overrides
-      return makeScreen({
+      return makeRecord({
         device: pickedScreenDevice,
         type: 'file',
         isActive: false,
@@ -1709,15 +1725,15 @@ describe('deviceDisplayService', () => {
     }
 
     /** An `html` Screen whose body embeds the marker `primePuppeteer` reads back as a fresh Render Signal. */
-    function htmlScreen(overrides: Partial<Screen> & { id: string, order: number }, signal: 'skip' | 'hold'): Screen {
+    function htmlScreen(overrides: Partial<Screen> & RecordFields & { id: string, order: number }, signal: 'skip' | 'hold'): DeviceScreen {
       const body = `<p>x</p><script>${signal === 'skip' ? SKIP_MARKER : HOLD_MARKER} = true</script>`
-      return makeScreen({ device: pickedScreenDevice, type: 'html', html: body, isActive: false, fetchManual: false, externalLink: null, generatedAt: new Date('2026-08-21T00:00:00'), ...overrides })
+      return makeRecord({ device: pickedScreenDevice, type: 'html', html: body, isActive: false, fetchManual: false, externalLink: null, generatedAt: new Date('2026-08-21T00:00:00'), ...overrides })
     }
 
-    function primeRotation(screens: Screen[], pickedScreen: Screen | null) {
-      pickedScreenDevice.pickedScreen = pickedScreen
+    function primeRotation(screens: DeviceScreen[], pickedScreen: DeviceScreen | null) {
+      pickedScreenDevice.pickedScreen = pickedScreen?.screen ?? null
       deviceRepo.findOneBy.mockResolvedValue(pickedScreenDevice)
-      screenRepo.find.mockResolvedValue(screens)
+      deviceScreenRepo.find.mockResolvedValue(screens)
       screenRepo.findOne.mockResolvedValue(null)
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(true)
@@ -1807,7 +1823,7 @@ describe('deviceDisplayService', () => {
       const result = await service.getCurrentImage(headers)
 
       expect(result.image_url).toBe('http://api/screens/devices/1/screen3.png')
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen2' }, { renderSignal: 'skip' })
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen2' }, { renderSignal: 'skip' })
       expect(deviceRepo.update).toHaveBeenCalledWith({ id: '1' }, { pickedScreen: null })
     })
 
@@ -1826,24 +1842,24 @@ describe('deviceDisplayService', () => {
 
     it('is held, not cleared, while the Device sleeps', async () => {
       const picked = fileScreen({ id: 'screen2', order: 2 })
-      const sleeper = makeDevice({ ...pickedScreenDevice, sleepModeEnabled: true, sleepStartTime: 22 * 3600, sleepEndTime: 6 * 3600, sleepScreenEnabled: false, pickedScreen: picked })
+      const sleeper = makeDevice({ ...pickedScreenDevice, sleepModeEnabled: true, sleepStartTime: 22 * 3600, sleepEndTime: 6 * 3600, sleepScreenEnabled: false, pickedScreen: picked.screen })
       deviceRepo.findOneBy.mockResolvedValue(sleeper)
-      screenRepo.findOneBy.mockResolvedValue(null)
+      deviceScreenRepo.findOne.mockResolvedValue(null)
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(true)
 
       vi.setSystemTime(new Date('2026-08-21T23:00:00'))
       await service.getCurrentImage(headers)
 
-      expect(screenRepo.find).not.toHaveBeenCalled()
+      expect(deviceScreenRepo.find).not.toHaveBeenCalled()
       expect(deviceRepo.update).not.toHaveBeenCalledWith({ id: sleeper.id }, { pickedScreen: null })
     })
 
     it('is served at the first poll after wake', async () => {
       const picked = fileScreen({ id: 'screen2', order: 2 })
-      const sleeper = makeDevice({ ...pickedScreenDevice, sleepModeEnabled: true, sleepStartTime: 22 * 3600, sleepEndTime: 6 * 3600, sleepScreenEnabled: false, pickedScreen: picked })
+      const sleeper = makeDevice({ ...pickedScreenDevice, sleepModeEnabled: true, sleepStartTime: 22 * 3600, sleepEndTime: 6 * 3600, sleepScreenEnabled: false, pickedScreen: picked.screen })
       deviceRepo.findOneBy.mockResolvedValue(sleeper)
-      screenRepo.find.mockResolvedValue([fileScreen({ id: 'screen1', order: 1, isActive: true }), picked])
+      deviceScreenRepo.find.mockResolvedValue([fileScreen({ id: 'screen1', order: 1, isActive: true }), picked])
       screenRepo.findOne.mockResolvedValue(null)
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(true)
@@ -1875,12 +1891,12 @@ describe('deviceDisplayService', () => {
         const result = await service.getCurrentImage(headers)
 
         expect(result.image_url).toBe('http://api/screens/devices/1/screen2.png')
-        expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen2' }, expect.objectContaining({ isActive: true }))
+        expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen2' }, expect.objectContaining({ isActive: true }))
       })
 
       it('re-renders the Active Screen on a timer poll rather than holding it', async () => {
         manual()
-        const active = makeScreen({ device: pickedScreenDevice, id: 'screen2', order: 2, type: 'html', html: '<p>live</p>', isActive: true, fetchManual: false, externalLink: null, generatedAt: new Date('2026-08-21T00:00:00') })
+        const active = makeRecord({ device: pickedScreenDevice, id: 'screen2', order: 2, type: 'html', html: '<p>live</p>', isActive: true, fetchManual: false, externalLink: null, generatedAt: new Date('2026-08-21T00:00:00') })
         primeRotation([fileScreen({ id: 'screen1', order: 1 }), active], null)
         const render = vi.spyOn(screenRender, 'renderBodyToScreenPng').mockResolvedValue('http://api/screens/devices/1/screen2.png')
 
@@ -1955,7 +1971,7 @@ describe('deviceDisplayService', () => {
     const signalDevice = makeDevice({ ...baseDevice, apikey: 'token', id: '1', mirrorEnabled: false })
 
     /** A `plugin`, `html` or `mashup` Screen; the signal embeds the marker(s) `primePuppeteer` reads back as the flag(s). */
-    function renderedScreen(overrides: Partial<Screen> & { id: string, order: number }, signal: 'skip' | 'hold' | 'both' | null): Screen {
+    function renderedScreen(overrides: Partial<Screen> & RecordFields & { id: string, order: number }, signal: 'skip' | 'hold' | 'both' | null): DeviceScreen {
       const body = signal === 'both'
         ? `<p>x</p><script>${SKIP_MARKER} = true; ${HOLD_MARKER} = true</script>`
         : signal
@@ -1966,13 +1982,13 @@ describe('deviceDisplayService', () => {
         : overrides.type === 'mashup'
           ? { mashupConfiguration: makeMashupConfiguration({ id: `${overrides.id}-mashup`, slots: [makeMashupSlot({ id: `${overrides.id}-slot`, renderedMarkup: body })] }), cachedPluginOutput: body, html: null }
           : { type: 'html' as const, html: body }
-      return makeScreen({ device: signalDevice, isActive: false, fetchManual: false, externalLink: null, filename: 'x', generatedAt: new Date('2026-08-21T00:00:00'), ...base, ...overrides })
+      return makeRecord({ device: signalDevice, isActive: false, fetchManual: false, externalLink: null, filename: 'x', generatedAt: new Date('2026-08-21T00:00:00'), ...base, ...overrides })
     }
 
-    function primeRotation(screens: Screen[]) {
-      const byId = new Map(screens.map(screen => [screen.id, screen]))
+    function primeRotation(screens: DeviceScreen[]) {
+      const byId = new Map(screens.map(record => [record.screen.id, record.screen]))
       deviceRepo.findOneBy.mockResolvedValue(signalDevice)
-      screenRepo.find.mockResolvedValue(screens)
+      deviceScreenRepo.find.mockResolvedValue(screens)
       screenRepo.findOne.mockImplementation(async options => byId.get((options.where as { id: string }).id) ?? null)
       configService.get.mockReturnValue('http://api')
       fileExists.mockResolvedValue(false)
@@ -1998,8 +2014,8 @@ describe('deviceDisplayService', () => {
       const result = await service.getCurrentImage(headers)
 
       expect(result.image_url).toBe('http://api/screens/devices/1/screen2.png')
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen1' }, { renderSignal: 'skip' })
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen2' }, expect.objectContaining({ isActive: true, renderSignal: null }))
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen1' }, { renderSignal: 'skip' })
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen2' }, expect.objectContaining({ isActive: true, renderSignal: null }))
     })
 
     it('wraps past the end of the rotation to find a Screen that does not skip', async () => {
@@ -2023,9 +2039,9 @@ describe('deviceDisplayService', () => {
       const result = await service.getCurrentImage(headers)
 
       expect(result.filename).toBe('noScreen.png')
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen1' }, { renderSignal: 'skip' })
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen2' }, { renderSignal: 'skip' })
-      expect(screenRepo.update).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ isActive: true }))
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen1' }, { renderSignal: 'skip' })
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen2' }, { renderSignal: 'skip' })
+      expect(deviceScreenRepo.update).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ isActive: true }))
     })
 
     it('does not overwrite the skipped Screen\'s stored image', async () => {
@@ -2059,7 +2075,7 @@ describe('deviceDisplayService', () => {
 
       expect(puppeteerLaunch).toHaveBeenCalled()
       expect(result.image_url).toBe('http://api/screens/devices/1/screen1.png')
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen1' }, expect.objectContaining({ isActive: true, renderSignal: null }))
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen1' }, expect.objectContaining({ isActive: true, renderSignal: null }))
     })
 
     it('never renders a schedule-ineligible Screen to look for a signal', async () => {
@@ -2084,7 +2100,7 @@ describe('deviceDisplayService', () => {
       expect(result.filename).toBe(`x_${new Date('2026-08-21T00:00:00').toISOString()}`)
       // The screenshot never happens: honouring the signal returns before one is taken.
       expect(puppeteerPage.screenshot).not.toHaveBeenCalled()
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen1' }, { isActive: true, renderSignal: 'hold' })
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen1' }, { isActive: true, renderSignal: 'hold' })
     })
 
     it('holds a Screen with no stored image yet: still Active, serving the noScreen fallback', async () => {
@@ -2095,7 +2111,7 @@ describe('deviceDisplayService', () => {
 
       expect(result.filename).toBe('noScreen.png')
       expect(result.image_url).toBe('http://api/screens/noScreen.png')
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen1' }, { isActive: true, renderSignal: 'hold' })
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen1' }, { isActive: true, renderSignal: 'hold' })
     })
 
     it('treats a Screen that sets both flags as skip, not hold', async () => {
@@ -2107,7 +2123,7 @@ describe('deviceDisplayService', () => {
       const result = await service.getCurrentImage(headers)
 
       expect(result.image_url).toBe('http://api/screens/devices/1/screen2.png')
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen1' }, { renderSignal: 'skip' })
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen1' }, { renderSignal: 'skip' })
     })
 
     it.each(['plugin', 'mashup'] as const)('does not launch Chrome for a %s Screen whose Render Signal is already remembered as hold, serving the stored image', async (type) => {
@@ -2118,7 +2134,7 @@ describe('deviceDisplayService', () => {
 
       expect(result.image_url).toBe('http://api/screens/devices/1/screen1.png')
       expect(puppeteerLaunch).not.toHaveBeenCalled()
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen1' }, { isActive: true, renderSignal: 'hold' })
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen1' }, { isActive: true, renderSignal: 'hold' })
     })
 
     it('evaluates a raw html Screen fresh on every poll, even though its last verdict was hold', async () => {
@@ -2128,7 +2144,7 @@ describe('deviceDisplayService', () => {
 
       expect(puppeteerLaunch).toHaveBeenCalled()
       expect(result.image_url).toBe('http://api/screens/devices/1/screen1.png')
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen1' }, expect.objectContaining({ isActive: true, renderSignal: null }))
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen1' }, expect.objectContaining({ isActive: true, renderSignal: null }))
     })
 
     it('names a freshly held Screen\'s filename by when its image was last written, not by the cache refresh that triggered this hold', async () => {
@@ -2143,8 +2159,8 @@ describe('deviceDisplayService', () => {
     })
 
     it('keeps the filename stable across a cache refresh that holds again', async () => {
-      const screen = renderedScreen({ id: 'screen1', order: 1, type: 'plugin' }, 'hold')
-      primeRotation([screen])
+      const record = renderedScreen({ id: 'screen1', order: 1, type: 'plugin' }, 'hold')
+      primeRotation([record])
       fileExists.mockResolvedValue(true)
       // The stored image file is never rewritten while held, so its mtime never advances.
       fileModifiedAt.mockResolvedValue(new Date('2026-08-20T00:00:00'))
@@ -2153,8 +2169,8 @@ describe('deviceDisplayService', () => {
       // An external cache writer (scheduler tick, Webhook, Plugin edit) refreshes the
       // content and clears the remembered verdict; the render it triggers at this
       // Screen's next turn holds again.
-      screen.renderSignal = null
-      screen.cachedPluginOutput = `<p>y</p><script>${HOLD_MARKER} = true</script>`
+      record.renderSignal = null
+      record.cachedPluginOutput = `<p>y</p><script>${HOLD_MARKER} = true</script>`
       const second = await service.getCurrentImage(headers)
 
       expect(first.filename).toBe(`x_${new Date('2026-08-20T00:00:00').toISOString()}`)
@@ -2162,21 +2178,21 @@ describe('deviceDisplayService', () => {
     })
 
     it('regenerates the image and changes the filename once the content stops setting the flag', async () => {
-      const screen = renderedScreen({ id: 'screen1', order: 1, type: 'plugin', generatedAt: new Date('2026-08-21T06:00:00') }, 'hold')
-      primeRotation([screen])
+      const record = renderedScreen({ id: 'screen1', order: 1, type: 'plugin', generatedAt: new Date('2026-08-21T06:00:00') }, 'hold')
+      primeRotation([record])
       fileExists.mockResolvedValue(true)
       fileModifiedAt.mockResolvedValue(new Date('2026-08-20T00:00:00'))
 
       const held = await service.getCurrentImage(headers)
       // An external cache writer refreshes the content, now without the flag, bumping generatedAt.
-      screen.renderSignal = null
-      screen.generatedAt = new Date('2026-08-21T09:00:00')
-      screen.cachedPluginOutput = '<p>y</p>'
+      record.renderSignal = null
+      record.generatedAt = new Date('2026-08-21T09:00:00')
+      record.cachedPluginOutput = '<p>y</p>'
       const resumed = await service.getCurrentImage(headers)
 
       expect(held.filename).toBe(`x_${new Date('2026-08-20T00:00:00').toISOString()}`)
       expect(resumed.filename).toBe(`x_${new Date('2026-08-21T09:00:00').toISOString()}`)
-      expect(screenRepo.update).toHaveBeenCalledWith({ id: 'screen1' }, expect.objectContaining({ isActive: true, renderSignal: null }))
+      expect(deviceScreenRepo.update).toHaveBeenCalledWith({ id: 'record-of-screen1' }, expect.objectContaining({ isActive: true, renderSignal: null }))
     })
   })
 
@@ -2195,9 +2211,9 @@ describe('deviceDisplayService', () => {
 
     it('leaves rotation and refresh rate unaffected when sleep mode is disabled', async () => {
       const device = makeDevice({ ...sleepingDevice, sleepModeEnabled: false, refreshRate: 60 })
-      const activeScreen = makeScreen({ id: 'screen1', order: 1, device, isActive: true, fetchManual: false, externalLink: null, filename: 'file.png' })
+      const activeScreen = makeRecord({ id: 'screen1', order: 1, device, isActive: true, fetchManual: false, externalLink: null, filename: 'file.png' })
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue([activeScreen, makeScreen({ ...activeScreen, id: 'screen2', order: 2, isActive: false })])
+      deviceScreenRepo.find.mockResolvedValue([activeScreen, makeRecord({ ...flat(activeScreen), id: 'screen2', order: 2, isActive: false })])
 
       vi.setSystemTime(new Date('2026-08-22T23:00:00'))
       const result = await service.getCurrentImage(headers)
@@ -2207,20 +2223,20 @@ describe('deviceDisplayService', () => {
     })
 
     it('does not advance the active screen while asleep', async () => {
-      const activeScreen = makeScreen({ id: 'screen1', order: 1, device: sleepingDevice, isActive: true, fetchManual: false, externalLink: null, filename: 'file.png' })
+      const activeScreen = makeRecord({ id: 'screen1', order: 1, device: sleepingDevice, isActive: true, fetchManual: false, externalLink: null, filename: 'file.png' })
       deviceRepo.findOneBy.mockResolvedValue(sleepingDevice)
-      screenRepo.find.mockResolvedValue([activeScreen, makeScreen({ ...activeScreen, id: 'screen2', order: 2, isActive: false })])
+      deviceScreenRepo.find.mockResolvedValue([activeScreen, makeRecord({ ...flat(activeScreen), id: 'screen2', order: 2, isActive: false })])
 
       vi.setSystemTime(new Date('2026-08-22T23:00:00'))
       await service.getCurrentImage(headers)
 
-      expect(screenRepo.update).not.toHaveBeenCalled()
-      expect(screenRepo.save).not.toHaveBeenCalled()
+      expect(deviceScreenRepo.update).not.toHaveBeenCalled()
+      expect(deviceScreenRepo.save).not.toHaveBeenCalled()
     })
 
     it('returns a refresh rate of seconds-until-sleepEndTime, wrapping past midnight', async () => {
       deviceRepo.findOneBy.mockResolvedValue(sleepingDevice)
-      screenRepo.findOneBy.mockResolvedValue(null)
+      deviceScreenRepo.findOne.mockResolvedValue(null)
 
       vi.setSystemTime(new Date('2026-08-22T23:00:00'))
       const result = await service.getCurrentImage(headers)
@@ -2230,7 +2246,7 @@ describe('deviceDisplayService', () => {
 
     it('floors the refresh rate at the minimum right at the boundary', async () => {
       deviceRepo.findOneBy.mockResolvedValue(sleepingDevice)
-      screenRepo.findOneBy.mockResolvedValue(null)
+      deviceScreenRepo.findOne.mockResolvedValue(null)
 
       vi.setSystemTime(new Date('2026-08-22T05:59:30'))
       const result = await service.getCurrentImage(headers)
@@ -2241,7 +2257,7 @@ describe('deviceDisplayService', () => {
     it('is not asleep outside the configured window', async () => {
       const device = makeDevice({ ...sleepingDevice, refreshRate: 60 })
       deviceRepo.findOneBy.mockResolvedValue(device)
-      screenRepo.find.mockResolvedValue([])
+      deviceScreenRepo.find.mockResolvedValue([])
 
       vi.setSystemTime(new Date('2026-08-22T12:00:00'))
       const result = await service.getCurrentImage(headers)
@@ -2258,7 +2274,7 @@ describe('deviceDisplayService', () => {
 
       expect(result.filename).toBe('sleep.png')
       expect(result.image_url).toBe('http://api/screens/sleep.png')
-      expect(screenRepo.find).not.toHaveBeenCalled()
+      expect(deviceScreenRepo.find).not.toHaveBeenCalled()
       expect(fallbackScreens.urlFor).toHaveBeenCalledWith({ kind: 'sleep' }, device, { model: OG_PLUS, palette: GRAY_4 })
     })
 
@@ -2289,7 +2305,7 @@ describe('deviceDisplayService', () => {
 
     it('keeps showing noScreen for a screenless device with the sleep screen disabled', async () => {
       deviceRepo.findOneBy.mockResolvedValue(sleepingDevice)
-      screenRepo.findOneBy.mockResolvedValue(null)
+      deviceScreenRepo.findOne.mockResolvedValue(null)
 
       vi.setSystemTime(new Date('2026-08-22T23:00:00'))
       const result = await service.getCurrentImage(headers)
@@ -2300,9 +2316,9 @@ describe('deviceDisplayService', () => {
 
     it('freezes the existing active screen image when the sleep screen is disabled', async () => {
       const generatedAt = new Date('2026-08-20T00:00:00Z')
-      const activeScreen = makeScreen({ id: 'screen1', device: sleepingDevice, isActive: true, filename: 'file.png', generatedAt })
+      const activeScreen = makeRecord({ id: 'screen1', device: sleepingDevice, isActive: true, filename: 'file.png', generatedAt })
       deviceRepo.findOneBy.mockResolvedValue(sleepingDevice)
-      screenRepo.findOneBy.mockResolvedValue(activeScreen)
+      deviceScreenRepo.findOne.mockResolvedValue(activeScreen)
 
       vi.setSystemTime(new Date('2026-08-22T23:00:00'))
       const result = await service.getCurrentImage(headers)
@@ -2348,9 +2364,9 @@ describe('deviceDisplayService', () => {
       })
 
       it('keeps showing the active screen when the sleep screen is disabled', async () => {
-        const activeScreen = makeScreen({ id: 'screen1', device: sleepingDevice, filename: 'file.png', isActive: true })
+        const activeScreen = makeRecord({ id: 'screen1', device: sleepingDevice, filename: 'file.png', isActive: true })
         deviceRepo.findOneBy.mockResolvedValue(sleepingDevice)
-        screenRepo.findOneBy.mockResolvedValue(activeScreen)
+        deviceScreenRepo.findOne.mockResolvedValue(activeScreen)
 
         vi.setSystemTime(new Date('2026-08-22T23:00:00'))
         const result = await service.getCurrentImageWithoutProgressing(headers)
@@ -2367,8 +2383,8 @@ describe('deviceDisplayService', () => {
     const device = makeDevice({ ...baseDevice, deviceModel: OG_PLUS, specialFunction: 'none' })
     const mirrored = makeDevice({ ...device, mirrorEnabled: true, mirrorMac: 'other-mac', mirrorApikey: 'mirror-token' })
     const sleeper = makeDevice({ ...device, sleepModeEnabled: true, sleepStartTime: 22 * 3600, sleepEndTime: 6 * 3600 })
-    const shown = makeScreen({ id: 'screen1', order: 1, device, isActive: true, filename: 'Calendar' })
-    const next = makeScreen({ id: 'screen2', order: 2, device, filename: 'Weather' })
+    const shown = makeRecord({ id: 'screen1', order: 1, device, isActive: true, filename: 'Calendar' })
+    const next = makeRecord({ id: 'screen2', order: 2, device, filename: 'Weather' })
     const nextFilename = 'Weather_2026-01-01T00:00:00.000Z'
 
     const answerBase = { action: 'none', firmware_url: '', refresh_rate: 60, reset_firmware: false, special_function: 'none', temperature_profile: 'default', update_firmware: false }
@@ -2376,11 +2392,11 @@ describe('deviceDisplayService', () => {
     const errorAnswer = { ...answerBase, filename: nextFilename, image_url: 'http://api/screens/error.png' }
     const renderFailedRecord = { ...recordBase, lastServedKind: 'fallback', lastServedFallback: 'error', lastServedReason: 'renderFailed', lastServedScreenId: 'screen2', lastServedImagePath: '/screens/error.png' }
 
-    function primeNext(overrides: Partial<Screen>) {
-      const screen = makeScreen({ ...next, ...overrides })
+    function primeNext(overrides: Partial<Screen> & RecordFields) {
+      const screen = makeRecord({ ...flat(next), ...overrides })
       deviceRepo.findOneBy.mockResolvedValue(makeDevice(device))
-      screenRepo.find.mockResolvedValue([makeScreen(shown), screen])
-      screenRepo.findOne.mockResolvedValue(screen)
+      deviceScreenRepo.find.mockResolvedValue([makeRecord(flat(shown)), screen])
+      screenRepo.findOne.mockResolvedValue(screen.screen)
     }
 
     interface ServedCase {
@@ -2405,7 +2421,7 @@ describe('deviceDisplayService', () => {
         name: 'the no-screen Fallback Screen, without Screens',
         prime: () => {
           deviceRepo.findOneBy.mockResolvedValue(makeDevice(device))
-          screenRepo.find.mockResolvedValue([])
+          deviceScreenRepo.find.mockResolvedValue([])
         },
         answer: { ...answerBase, filename: 'noScreen.png', image_url: 'http://api/screens/noScreen.png' },
         record: { ...recordBase, lastServedKind: 'fallback', lastServedFallback: 'noScreen', lastServedReason: 'noScreens', lastServedImagePath: '/screens/noScreen.png' },
@@ -2414,7 +2430,7 @@ describe('deviceDisplayService', () => {
         name: 'the no-screen Fallback Screen, with every Screen passed over',
         prime: () => {
           deviceRepo.findOneBy.mockResolvedValue(makeDevice(device))
-          screenRepo.find.mockResolvedValue([makeScreen({ ...next, schedule: makeSchedule({ enabled: false }) })])
+          deviceScreenRepo.find.mockResolvedValue([makeRecord({ ...flat(next), schedule: makeSchedule({ enabled: false }) })])
         },
         answer: { ...answerBase, filename: 'noScreen.png', image_url: 'http://api/screens/noScreen.png' },
         record: { ...recordBase, lastServedKind: 'fallback', lastServedFallback: 'noScreen', lastServedReason: 'noneEligible', lastServedImagePath: '/screens/noScreen.png' },
@@ -2503,7 +2519,7 @@ describe('deviceDisplayService', () => {
         at: ASLEEP_AT,
         prime: () => {
           deviceRepo.findOneBy.mockResolvedValue(makeDevice(sleeper))
-          screenRepo.findOneBy.mockResolvedValue(makeScreen(shown))
+          deviceScreenRepo.findOne.mockResolvedValue(makeRecord(flat(shown)))
           fileExists.mockResolvedValue(true)
         },
         answer: { ...answerBase, filename: 'Calendar_2026-01-01T00:00:00.000Z', image_url: 'http://api/screens/devices/1/screen1.png', refresh_rate: 7 * 3600 },
@@ -2514,8 +2530,8 @@ describe('deviceDisplayService', () => {
         at: ASLEEP_AT,
         prime: () => {
           deviceRepo.findOneBy.mockResolvedValue(makeDevice(sleeper))
-          screenRepo.findOneBy.mockResolvedValue(null)
-          screenRepo.count.mockResolvedValue(2)
+          deviceScreenRepo.findOne.mockResolvedValue(null)
+          deviceScreenRepo.count.mockResolvedValue(2)
         },
         answer: { ...answerBase, filename: 'noScreen.png', image_url: 'http://api/screens/noScreen.png', refresh_rate: 7 * 3600 },
         record: { ...recordBase, lastServedAt: ASLEEP_AT, lastServedKind: 'fallback', lastServedFallback: 'noScreen', lastServedReason: 'noneEligible', lastServedImagePath: '/screens/noScreen.png', lastServedRefreshRate: 7 * 3600 },

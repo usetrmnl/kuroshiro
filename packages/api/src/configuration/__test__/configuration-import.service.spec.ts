@@ -73,6 +73,7 @@ const ENTITY_NAMES = [
   'DevicePlugin',
   'PluginFieldValue',
   'Screen',
+  'DeviceScreen',
   'Schedule',
   'MashupConfiguration',
   'MashupSlot',
@@ -119,6 +120,10 @@ function createFakeManager() {
         return null
       }),
       create: vi.fn((partial: FakeRow = {}) => ({ ...partial })),
+      insert: vi.fn(async (entity: FakeRow) => {
+        const id = entity.id ?? `generated-${name}-${idCounter++}`
+        table.set(id, { ...entity, id })
+      }),
       save: vi.fn(async (entity: FakeRow) => {
         const id = entity.id ?? `generated-${name}-${idCounter++}`
         const saved = { ...entity, id }
