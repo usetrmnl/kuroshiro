@@ -44,6 +44,7 @@ export class AddDeviceScreen1787430000000 implements MigrationInterface {
       UPDATE "screen" SET "isActive" = "ds"."isActive", "generatedAt" = "ds"."generatedAt", "cachedPluginOutput" = "ds"."cachedPluginOutput", "renderSignal" = "ds"."renderSignal"
       FROM "device_screen" "ds" WHERE "ds"."screenId" = "screen"."id" AND "ds"."deviceId" = "screen"."deviceId"
     `)
+    // A Screen without a record for its own Device (none exist before slice 3 of #1786) has no render time to restore.
     await queryRunner.query(`UPDATE "screen" SET "generatedAt" = now() WHERE "generatedAt" IS NULL`)
     await queryRunner.query(`ALTER TABLE "screen" ALTER COLUMN "generatedAt" SET NOT NULL`)
     await queryRunner.query(`DROP TABLE "device_screen"`)
