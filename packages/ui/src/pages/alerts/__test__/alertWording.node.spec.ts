@@ -1,13 +1,13 @@
 import type { AlertSummary } from 'kuroshiro-shared'
 import { describe, expect, it } from 'vitest'
-import { alertSubject, alertWhy, duration, firedFor, sinceWhen } from '../alertWording'
+import { alertSubject, alertWhy, duration, firedFor, remindedWhen, sinceWhen } from '../alertWording'
 
 /** Saturday 3 October 2026, 09:35, on the clock of whoever runs the spec. */
 const NOW = new Date(2026, 9, 3, 9, 35)
 const at = (day: number, hour: number, minute: number) => new Date(2026, 9, day, hour, minute).toISOString()
 
 function alert(overrides: Partial<AlertSummary>): AlertSummary {
-  return { id: 'alert', kind: 'device-low-battery', device: { id: 'hallway', name: 'Hallway' }, plugin: null, dataSource: null, openedAt: at(3, 8, 10), resolvedAt: null, details: { percent: 14 }, ...overrides }
+  return { id: 'alert', kind: 'device-low-battery', device: { id: 'hallway', name: 'Hallway' }, plugin: null, dataSource: null, openedAt: at(3, 8, 10), remindedAt: null, resolvedAt: null, details: { percent: 14 }, ...overrides }
 }
 
 const FETCH = { kind: 'data-source-fetch-failing', device: null, plugin: { id: 'trains', name: 'Train departures' }, dataSource: { id: 'source', name: 'departures' } } as const
@@ -86,6 +86,13 @@ describe('when an Alert fired', () => {
     expect(sinceWhen(at(2, 21, 35), NOW)).toBe('since yesterday, 21:35')
     expect(sinceWhen(at(0, 2, 10), NOW)).toBe('since Wednesday 02:10')
     expect(sinceWhen(new Date(2026, 7, 20, 7, 31).toISOString(), NOW)).toBe('since 20 Aug 2026, 07:31')
+  })
+
+  it('says how long ago the last Reminder was, or when, and nothing when there was none', () => {
+    expect(remindedWhen(null, NOW)).toBeUndefined()
+    expect(remindedWhen(at(3, 7, 35), NOW)).toBe('reminded 2 h ago')
+    expect(remindedWhen(at(2, 8, 5), NOW)).toBe('reminded yesterday, 08:05')
+    expect(remindedWhen(at(0, 2, 10), NOW)).toBe('reminded Wednesday 02:10')
   })
 
   it('reads with how long it lasted once resolved', () => {

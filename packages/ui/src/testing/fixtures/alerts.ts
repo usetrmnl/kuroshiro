@@ -8,6 +8,7 @@ export const buildAlert = defineBuilder<AlertSummary>(() => ({
   plugin: null,
   dataSource: null,
   openedAt: '2026-10-03T06:05:00.000Z',
+  remindedAt: null,
   resolvedAt: null,
   details: { percent: 18 },
 }))

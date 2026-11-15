@@ -575,7 +575,7 @@ function add() {
 | File | Holds |
 | --- | --- |
 | `alertLabels.ts` | `FIRING_ALERT_LABELS` ("Alert: battery low") and `RESOLVED_ALERT_LABELS` ("Battery low"), by Alert kind. A Device's facts and a Plugin's row state read the firing ones from here |
-| `alertWording.ts` | `alertWhy(alert, { now, lowBatteryPercent })`, the sentence that says why an Alert fires or, once it has `resolvedAt`, why it fired, from the `details` the server keeps; `alertSubject(alert)`, the name and the link of its Device or of its Plugin's Data Source; `sinceWhen`, `firedFor` and `duration` |
+| `alertWording.ts` | `alertWhy(alert, { now, lowBatteryPercent })`, the sentence that says why an Alert fires or, once it has `resolvedAt`, why it fired, from the `details` the server keeps; `alertSubject(alert)`, the name and the link of its Device or of its Plugin's Data Source; `sinceWhen`, `remindedWhen`, `firedFor` and `duration` |
 | `AlertRow.vue` | One Alert as a row of four cells, red only while it fires |
 
 - The page reads the shared `useAlerts()`, which already holds the firing Alerts and those resolved in the last 7 days, capped at 50. It fetches nothing of its own but the Instance Settings, for the thresholds.

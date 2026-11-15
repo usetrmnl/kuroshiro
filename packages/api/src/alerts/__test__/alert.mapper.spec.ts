@@ -14,6 +14,7 @@ describe('toAlertSummary', () => {
       plugin: null,
       dataSource: null,
       openedAt: alert.openedAt.toISOString(),
+      remindedAt: null,
       resolvedAt: null,
       details: { lastSeen: 'x' },
     })
@@ -30,9 +31,16 @@ describe('toAlertSummary', () => {
       plugin: { id: 'plugin-1', name: 'Weather Dashboard' },
       dataSource: { id: 'ds-1', name: 'Weather API' },
       openedAt: alert.openedAt.toISOString(),
+      remindedAt: null,
       resolvedAt: null,
       details: { streak: 3, lastError: 'timeout' },
     })
+  })
+
+  it('resolves a remindedAt to an ISO string', () => {
+    const alert = makeAlert({ device: makeDevice({ id: 'device-1' }), remindedAt: new Date('2026-01-03T00:00:00.000Z') })
+
+    expect(toAlertSummary(alert)?.remindedAt).toBe('2026-01-03T00:00:00.000Z')
   })
 
   it('resolves a resolvedAt and a details-less Alert', () => {
