@@ -24,7 +24,7 @@ describe('devicesService', () => {
   let deviceModels: MockDeviceModelsService
   let paletteSelection: MockPaletteSelectionService
   let firmwareService: { findById: ReturnType<typeof vi.fn> }
-  let screensService: { redrawForRenderTarget: ReturnType<typeof vi.fn> }
+  let screensService: { redrawForRenderTarget: ReturnType<typeof vi.fn>, convertGroupScreensFor: ReturnType<typeof vi.fn> }
   let deviceSleepImage: { reconvert: ReturnType<typeof vi.fn> }
 
   beforeEach(() => {
@@ -33,7 +33,7 @@ describe('devicesService', () => {
     paletteSelection = createMockPaletteSelectionService()
     paletteSelection.supportsPalette.mockImplementation(async (model: DeviceModel, palette: Palette) => model.paletteIds.includes(palette.id))
     firmwareService = { findById: vi.fn() }
-    screensService = { redrawForRenderTarget: vi.fn().mockResolvedValue(0) }
+    screensService = { redrawForRenderTarget: vi.fn().mockResolvedValue(0), convertGroupScreensFor: vi.fn() }
     deviceSleepImage = { reconvert: vi.fn().mockResolvedValue(undefined) }
     service = new DevicesService(
       asRepository(repo),

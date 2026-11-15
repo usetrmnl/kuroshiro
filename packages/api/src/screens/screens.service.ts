@@ -385,6 +385,12 @@ export class ScreensService {
     return this.reconvertImageScreens(device, owners)
   }
 
+  /** Converts the Device Group's file and kept External Screens for a Device that has just joined it, from their retained originals. */
+  async convertGroupScreensFor(device: Device): Promise<void> {
+    if (device.deviceGroup)
+      await this.reconvertImageScreens(device, [{ kind: 'deviceGroup', id: device.deviceGroup.id }])
+  }
+
   private ownersOf(device: Device): ScreenOwner[] {
     const own: ScreenOwner = { kind: 'device', id: device.id }
     return device.deviceGroup ? [own, { kind: 'deviceGroup', id: device.deviceGroup.id }] : [own]

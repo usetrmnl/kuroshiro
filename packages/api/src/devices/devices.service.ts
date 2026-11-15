@@ -70,7 +70,10 @@ export class DevicesService {
     assertWipeAllowed(dbDevice)
     if (deviceGroupId !== undefined)
       await this.deviceGroupMembership.setGroup(dbDevice, deviceGroupId)
+    const joined = deviceGroupId !== undefined && deviceGroupId !== null
     const saved = await this.deviceRepository.save(dbDevice)
+    if (joined)
+      await this.screensService.convertGroupScreensFor(saved)
     if (renderTargetChanged(before, saved)) {
       await this.screensService.redrawForRenderTarget(saved)
       await this.deviceSleepImage.reconvert(saved)

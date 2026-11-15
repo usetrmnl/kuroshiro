@@ -58,7 +58,7 @@ describe('the Device reads against a real database', () => {
       controllers: [DevicesController, DisplayController, SetupController],
       providers: [
         { provide: DeviceReadsService, useValue: new DeviceReadsService(devices, screens, deviceScreens, deviceSensors) },
-        { provide: DevicesService, useValue: new DevicesService(devices, asService<DeviceModelsService>(deviceModels), asService<PaletteSelectionService>(paletteSelection), firmware, asService<ScreensService>({}), asService<DeviceSleepImageService>({ reconvert: vi.fn() }), new DeviceGroupMembershipService(devices, database.getRepository(DeviceGroup), database.getRepository(DeviceScreen))) },
+        { provide: DevicesService, useValue: new DevicesService(devices, asService<DeviceModelsService>(deviceModels), asService<PaletteSelectionService>(paletteSelection), firmware, asService<ScreensService>({ convertGroupScreensFor: vi.fn() }), asService<DeviceSleepImageService>({ reconvert: vi.fn() }), new DeviceGroupMembershipService(devices, database.getRepository(DeviceGroup), database.getRepository(DeviceScreen))) },
         { provide: DeviceSetupService, useValue: new DeviceSetupService(devices, asService<DeviceModelsService>(deviceModels), asService<FallbackScreensService>(fallbackScreens)) },
         {
           provide: DeviceDisplayService,

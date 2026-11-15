@@ -58,7 +58,7 @@ describe('the Device write and delete against a real database', () => {
       controllers: [DevicesController],
       providers: [
         { provide: DeviceReadsService, useValue: new DeviceReadsService(devices, database.getRepository(Screen), database.getRepository(DeviceScreen), deviceSensors) },
-        { provide: DevicesService, useValue: new DevicesService(devices, asService<DeviceModelsService>(deviceModels), asService<PaletteSelectionService>(paletteSelection), firmware, asService<ScreensService>({ redrawForRenderTarget }), asService<DeviceSleepImageService>({ reconvert: reconvertSleepImage }), new DeviceGroupMembershipService(devices, database.getRepository(DeviceGroup), database.getRepository(DeviceScreen))) },
+        { provide: DevicesService, useValue: new DevicesService(devices, asService<DeviceModelsService>(deviceModels), asService<PaletteSelectionService>(paletteSelection), firmware, asService<ScreensService>({ redrawForRenderTarget, convertGroupScreensFor: vi.fn() }), asService<DeviceSleepImageService>({ reconvert: reconvertSleepImage }), new DeviceGroupMembershipService(devices, database.getRepository(DeviceGroup), database.getRepository(DeviceScreen))) },
       ],
     })
   })

@@ -121,7 +121,7 @@ export interface PluginFieldRead {
 export type FieldValueRead = { secret: false, value: string | null } | { secret: true, set: boolean }
 
 export interface PluginAssignmentRead {
-  /** The id of the Device, or of the Device Group when `ownerKind` says so. */
+  /** The id of the Device, or of the Device Group. */
   deviceId: string
   deviceName: string
   screenId: string
