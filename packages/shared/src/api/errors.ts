@@ -71,6 +71,9 @@ export const API_ERROR_CODES = [
   'picked-screen-mirrored',
   'picked-screen-active',
   'picked-screen-ineligible',
+  'picked-screen-not-shown',
+  'device-group-not-found',
+  'device-group-name-taken',
   'cross-site-request',
 ] as const
 

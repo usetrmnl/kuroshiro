@@ -1,10 +1,11 @@
-import type { BooleanSettingKey, MergeStrategy, PluginKind, RotationMode, SettingKey } from 'kuroshiro-shared'
+import type { BooleanSettingKey, MergeStrategy, PluginKind, RotationMode, ScreenOwner, SettingKey } from 'kuroshiro-shared'
 import type { ParsedPlugin } from '../plugins/services/plugin-importer.service.js'
 import type { Screen } from '../screens/screens.entity.js'
 
 export const CONFIG_ARCHIVE_FILES = {
   manifest: 'manifest.json',
   plugins: 'plugins.json',
+  deviceGroups: 'device-groups.json',
   devices: 'devices.json',
   screens: 'screens.json',
   assignments: 'assignments.json',
@@ -70,6 +71,11 @@ export interface LegacyAssignmentManifestFields {
   fieldValues?: unknown[]
 }
 
+export interface DeviceGroupManifestEntry {
+  id: string
+  name: string
+}
+
 export interface DeviceManifestEntry {
   id: string
   name: string
@@ -89,6 +95,8 @@ export interface DeviceManifestEntry {
   sleepEndTime: number | null
   sleepScreenEnabled: boolean
   targetFirmwareId: string | null
+  /** The Device Group the Device is a member of. Absent from an archive older than schemaVersion 8, which reads as no change. */
+  deviceGroupId?: string | null
 }
 
 export interface ScheduleManifestEntry {
@@ -126,7 +134,10 @@ export interface ScreenFileFactsEntry {
 
 export interface ScreenManifestEntry extends ScreenFileFactsEntry {
   id: string
-  deviceId: string
+  /** The owning Device, `null` for a Device Group's Screen. Kept beside `owner` so an older Kuroshiro still reads a Device's Screens. */
+  deviceId: string | null
+  /** Absent from an archive older than schemaVersion 8, which reads as the Device `deviceId`. */
+  owner?: ScreenOwner
   type: Screen['type']
   order: number
   filename: string | null
@@ -143,7 +154,10 @@ export interface ScreenManifestEntry extends ScreenFileFactsEntry {
 
 export interface AssignmentManifestEntry {
   id: string
-  deviceId: string
+  /** `null` for a Device Group's Assignment. */
+  deviceId: string | null
+  /** Absent from an archive older than schemaVersion 8. */
+  deviceGroupId?: string | null
   pluginId: string
   order: number
   isActive: boolean

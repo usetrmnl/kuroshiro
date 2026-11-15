@@ -14,6 +14,7 @@ export const buildSchedule = defineBuilder<ScheduleRead>(() => ({
 export const buildScreen = defineBuilder<ScreenRead>(() => ({
   id: 'c2f1d0a4-5b6e-4c7d-8e9f-0a1b2c3d4e5f',
   deviceId: '3f6c1c1e-9d0a-4f39-8a53-0c2f0a1d7b11',
+  readOnly: false,
   kind: 'plugin',
   name: 'Calendar',
   order: 1,

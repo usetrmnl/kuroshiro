@@ -1,4 +1,4 @@
-import type { MashupLayout, MashupSlotRead, RenderSignal, ScheduleRead, ScreenRead, TemplateSize } from 'kuroshiro-shared'
+import type { GroupScreen, GroupScreenDeviceState, MashupLayout, MashupSlotRead, RenderSignal, ScheduleRead, ScreenRead, TemplateSize } from 'kuroshiro-shared'
 import type { MashupConfiguration } from '../mashup/entities/mashup-configuration.entity.js'
 import type { ScreenStateRead } from '../schedule/rotation.js'
 import type { Schedule } from '../schedule/schedule.entity.js'
@@ -9,16 +9,22 @@ import { toImagePath, toIsoString, toIsoStringOrNull } from '../utils/readModel.
 import { screenImageUrlPath } from './screen-image-paths.js'
 import { screenNameOf } from './screen-name.js'
 
-export interface ScreenFacts {
+/** What a Screen read carries whatever Device it is read for. */
+export interface ScreenBodyFacts {
+  requiredFieldEmpty: boolean
+  fetchAlertFiring: boolean
+}
+
+export interface ScreenFacts extends ScreenBodyFacts {
   deviceId: string
+  /** Whether the Screen is the Device's Device Group's, which is edited on the Group. */
+  readOnly: boolean
   state: ScreenStateRead
   renderSignal: RenderSignal | null
   /** When the Device's record of the Screen was last rendered or converted. */
   generatedAt: Date
   /** Whether the Screen's rendered image is on disk. */
   isRendered: boolean
-  requiredFieldEmpty: boolean
-  fetchAlertFiring: boolean
 }
 
 const STORED_SIZE_PREFIX = 'view--'
@@ -59,7 +65,7 @@ function toMashupRead(configuration: MashupConfiguration | undefined): ScreenRea
   return { layout, slots }
 }
 
-function toPluginReference(screen: Screen, facts: ScreenFacts): ScreenRead['plugin'] {
+function toPluginReference(screen: Screen, facts: ScreenBodyFacts): ScreenRead['plugin'] {
   const { plugin } = screen
   return plugin
     ? { id: plugin.id, name: plugin.name, kind: plugin.kind, requiredFieldEmpty: facts.requiredFieldEmpty, fetchAlertFiring: facts.fetchAlertFiring }
@@ -87,20 +93,15 @@ function ditherOf(screen: Screen): boolean {
   }
 }
 
-export function toScreenRead(screen: Screen, facts: ScreenFacts): ScreenRead {
+type ScreenBody = Omit<ScreenRead, 'deviceId' | 'readOnly' | 'state' | 'stateCause' | 'picked' | 'renderSignal' | 'imagePath' | 'renderedAt'>
+
+function toScreenBody(screen: Screen, facts: ScreenBodyFacts): ScreenBody {
   const kind = screen.type
   return {
     id: screen.id,
-    deviceId: facts.deviceId,
     kind,
     name: screenNameOf(screen),
     order: screen.order,
-    state: facts.state.state,
-    stateCause: facts.state.stateCause,
-    picked: facts.state.picked,
-    renderSignal: facts.renderSignal,
-    imagePath: facts.isRendered ? toImagePath(screenImageUrlPath(facts.deviceId, screen.id), facts.generatedAt) : null,
-    renderedAt: facts.isRendered ? toIsoString(facts.generatedAt) : null,
     schedule: screen.schedule ? toScheduleRead(screen.schedule) : null,
     plugin: kind === 'plugin' ? toPluginReference(screen, facts) : null,
     mashup: kind === 'mashup' ? toMashupRead(screen.mashupConfiguration) : null,
@@ -109,4 +110,43 @@ export function toScreenRead(screen: Screen, facts: ScreenFacts): ScreenRead {
     html: kind === 'html' ? screen.html ?? '' : null,
     dither: ditherOf(screen),
   }
+}
+
+export function toScreenRead(screen: Screen, facts: ScreenFacts): ScreenRead {
+  return {
+    ...toScreenBody(screen, facts),
+    deviceId: facts.deviceId,
+    readOnly: facts.readOnly,
+    state: facts.state.state,
+    stateCause: facts.state.stateCause,
+    picked: facts.state.picked,
+    renderSignal: facts.renderSignal,
+    imagePath: facts.isRendered ? toImagePath(screenImageUrlPath(facts.deviceId, screen.id), facts.generatedAt) : null,
+    renderedAt: facts.isRendered ? toIsoString(facts.generatedAt) : null,
+  }
+}
+
+export interface MemberFacts {
+  deviceId: string
+  state: ScreenStateRead
+  isActive: boolean
+  renderSignal: RenderSignal | null
+  /** `null` when the member has no stored record of the Screen yet. */
+  generatedAt: Date | null
+}
+
+function toGroupScreenDeviceState(facts: MemberFacts): GroupScreenDeviceState {
+  return {
+    deviceId: facts.deviceId,
+    isActive: facts.isActive,
+    state: facts.state.state,
+    stateCause: facts.state.stateCause,
+    picked: facts.state.picked,
+    renderSignal: facts.renderSignal,
+    generatedAt: toIsoStringOrNull(facts.generatedAt),
+  }
+}
+
+export function toGroupScreen(screen: Screen, deviceGroupId: string, facts: ScreenBodyFacts, perDevice: MemberFacts[]): GroupScreen {
+  return { ...toScreenBody(screen, facts), deviceGroupId, perDevice: perDevice.map(toGroupScreenDeviceState) }
 }

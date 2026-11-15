@@ -57,7 +57,8 @@ export class PluginReadsService {
     const facts = (await this.factsByPlugin([id]))(id)
     return toPluginDetail(plugin, {
       ...facts,
-      screensByDevice: await this.screensInOrderByDevice(facts.assignmentScreens.map(screen => screen.device.id)),
+      screensByDevice: await this.screensInOrderByDevice(facts.assignmentScreens.flatMap(screen => screen.device ? [screen.device.id] : [])),
+      screenCountByGroup: await this.screenCountByGroup(facts.assignmentScreens.flatMap(screen => screen.deviceGroup ? [screen.deviceGroup.id] : [])),
       now: new Date(),
       apiUrl: this.configService.getOrThrow<string>('api_url'),
     })
@@ -75,11 +76,11 @@ export class PluginReadsService {
       }),
       this.screenRepository.find({
         where: { type: 'plugin', plugin: { id: In(pluginIds) } },
-        relations: { plugin: true, device: true },
+        relations: { plugin: true, device: true, deviceGroup: true },
       }),
       this.screenRepository.find({
         where: { type: 'mashup', mashupConfiguration: { slots: { plugin: { id: In(pluginIds) } } } },
-        relations: { device: true, mashupConfiguration: { slots: { plugin: true } } },
+        relations: { device: true, deviceGroup: true, mashupConfiguration: { slots: { plugin: true } } },
       }),
     ])
 
@@ -93,6 +94,13 @@ export class PluginReadsService {
       assignmentScreens: assignmentsByPlugin.get(pluginId) ?? [],
       mashupScreens: mashupsByPlugin.get(pluginId) ?? [],
     })
+  }
+
+  private async screenCountByGroup(groupIds: string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>()
+    for (const groupId of new Set(groupIds))
+      counts.set(groupId, await this.screenRepository.countBy({ deviceGroup: { id: groupId } }))
+    return counts
   }
 
   /** Each Device's record of each of its Screens, in the Screens' Order. */

@@ -1,6 +1,7 @@
 import process from 'node:process'
 import { DataSource } from 'typeorm'
 import { Alert } from '../alerts/entities/alert.entity.js'
+import { DeviceGroup } from '../device-groups/device-group.entity.js'
 import { DeviceModel } from '../device-models/entities/device-model.entity.js'
 import { Palette } from '../device-models/entities/palette.entity.js'
 import { DeviceSensor } from '../device-sensors/entities/device-sensor.entity.js'
@@ -28,7 +29,7 @@ const AppDataSource = new DataSource({
   username: process.env[ENV_VARS.dbUser] || 'root',
   password: process.env[ENV_VARS.dbPassword] || 'root',
   database: process.env[ENV_VARS.dbName] || 'test',
-  entities: [Device, DeviceModel, Palette, DeviceSensor, Screen, DeviceScreen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, MashupConfiguration, MashupSlot, Schedule, Firmware, Alert, InstanceSettings],
+  entities: [Device, DeviceGroup, DeviceModel, Palette, DeviceSensor, Screen, DeviceScreen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, MashupConfiguration, MashupSlot, Schedule, Firmware, Alert, InstanceSettings],
   migrations: ['dist/src/migrations/*.js'],
   migrationsTableName: 'migrations',
   synchronize: false,

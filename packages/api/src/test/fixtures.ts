@@ -60,7 +60,7 @@ export function makeDeviceScreen(overrides: Partial<DeviceScreen> = {}): DeviceS
     id: `record-of-${screen.id}`,
     isActive: false,
     generatedAt: FIXED_DATE,
-    device: screen.device,
+    device: screen.device!,
     screen,
     ...overrides,
   }

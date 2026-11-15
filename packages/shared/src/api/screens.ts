@@ -114,9 +114,18 @@ export interface MashupSlotRead {
   pluginName: string
 }
 
+/** Who owns a Screen and its Order: a Device, or a Device Group whose members all show it (ADR-0078). */
+export interface ScreenOwner {
+  kind: 'device' | 'deviceGroup'
+  id: string
+}
+
 export interface ScreenRead {
   id: string
+  /** The Device whose state the read carries. */
   deviceId: string
+  /** `true` for a Screen the Device shows from its Device Group, which is edited on the Group. */
+  readOnly: boolean
   kind: ScreenKind
   /** A Plugin Screen has no name of its own and reads its Plugin's. */
   name: string
@@ -145,7 +154,10 @@ export interface ScreenRead {
 export const CREATABLE_SCREEN_KINDS = ['external', 'file', 'html'] as const satisfies readonly ScreenKind[]
 
 interface CreateScreenBase {
-  deviceId: string
+  /** Who the Screen is added to, at the end of its Order. */
+  owner?: ScreenOwner
+  /** Deprecated: `{ owner: { kind: 'device', id } }`. Read as that when `owner` is absent, until the admin UI sends `owner`. */
+  deviceId?: string
   name: string
   /** Defaults to `true`. `false` converts the content with hard thresholds, for text and line art. */
   dither?: boolean
@@ -172,7 +184,9 @@ export interface CreateHtmlScreenInput extends CreateScreenBase {
 export type CreateScreenInput = CreateExternalScreenInput | CreateFileScreenInput | CreateHtmlScreenInput
 
 export interface CreateMashupInput {
-  deviceId: string
+  owner?: ScreenOwner
+  /** Deprecated: see `CreateScreenInput`. */
+  deviceId?: string
   name: string
   layout: MashupLayout
   /** One Plugin per slot of the layout, in slot order. */
@@ -180,15 +194,17 @@ export interface CreateMashupInput {
 }
 
 export interface AssignPluginInput {
-  deviceId: string
+  owner?: ScreenOwner
+  /** Deprecated: `{ owner: { kind: 'device', id } }`. */
+  deviceId?: string
 }
 
 export interface ReorderScreensInput {
-  /** Every Screen of the Device, once, in the new Order. */
+  /** Every Screen of the Device or Device Group, once, in the new Order. */
   screenIds: string[]
 }
 
-/** Sets a Device's Picked Screen ("Show next"); to one of its own Screens. */
+/** Sets a Device's Picked Screen ("Show next"); to a Screen it shows, its own or its Device Group's. */
 export interface SetPickedScreenInput {
   screenId: string
 }

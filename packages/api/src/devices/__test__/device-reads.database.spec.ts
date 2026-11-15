@@ -12,6 +12,8 @@ import type { HttpTestApp } from '../../test/httpApp.js'
 import type { DeviceSleepImageService } from '../device-sleep-image.service.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { offlineRule } from '../../alerts/rules/offline.rule.js'
+import { DeviceGroupMembershipService } from '../../device-groups/device-group-membership.service.js'
+import { DeviceGroup } from '../../device-groups/device-group.entity.js'
 import { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
 import { DeviceSensor } from '../../device-sensors/entities/device-sensor.entity.js'
 import { Plugin } from '../../plugins/entities/plugin.entity.js'
@@ -56,7 +58,7 @@ describe('the Device reads against a real database', () => {
       controllers: [DevicesController, DisplayController, SetupController],
       providers: [
         { provide: DeviceReadsService, useValue: new DeviceReadsService(devices, screens, deviceScreens, deviceSensors) },
-        { provide: DevicesService, useValue: new DevicesService(devices, asService<DeviceModelsService>(deviceModels), asService<PaletteSelectionService>(paletteSelection), firmware, asService<ScreensService>({}), asService<DeviceSleepImageService>({ reconvert: vi.fn() })) },
+        { provide: DevicesService, useValue: new DevicesService(devices, asService<DeviceModelsService>(deviceModels), asService<PaletteSelectionService>(paletteSelection), firmware, asService<ScreensService>({}), asService<DeviceSleepImageService>({ reconvert: vi.fn() }), new DeviceGroupMembershipService(devices, database.getRepository(DeviceGroup), database.getRepository(DeviceScreen))) },
         { provide: DeviceSetupService, useValue: new DeviceSetupService(devices, asService<DeviceModelsService>(deviceModels), asService<FallbackScreensService>(fallbackScreens)) },
         {
           provide: DeviceDisplayService,

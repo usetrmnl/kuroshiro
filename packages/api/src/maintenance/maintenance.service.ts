@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import { Injectable, Logger } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { Repository } from 'typeorm'
+import { DeviceGroup } from '../device-groups/device-group.entity.js'
 import { DeviceModelsService } from '../device-models/device-models.service.js'
 import { FALLBACK_SCREEN_TEMPLATE_VERSION } from '../device-models/fallback-screen-templates.js'
 import { fallbackRenderPairFolder } from '../device-models/fallback-screens.service.js'
@@ -88,20 +89,22 @@ export class MaintenanceService {
     this.logger.log('Starting the stored-files check')
 
     const devices = await this.deviceRepository.find()
-    const screens = await this.screenRepository.find({ relations: { device: true } })
+    const screens = await this.screenRepository.find({ relations: { device: true, deviceGroup: true } })
     const folders = await this.listDeviceFolders()
-    const deviceIds = new Set(devices.map(device => device.id))
+    const groups = await this.deviceRepository.manager.getRepository(DeviceGroup).find()
+    // A Device Group's folder holds the originals of its file Screens, so it is as known as a Device's.
+    const deviceIds = new Set([...devices.map(device => device.id), ...groups.map(group => group.id)])
     const known = folders.filter(folder => deviceIds.has(folder.deviceId))
     const deleted = folders.filter(folder => !deviceIds.has(folder.deviceId))
     const oldEnough = (file: StoredFile) => Date.now() - file.modifiedAtMs > TEMP_FILE_THRESHOLD_MS
 
     const findings: StorageFinding[] = [
-      ...known.flatMap(folder => this.unusedImagesOf(folder, screens)).sort(byPath),
+      ...known.flatMap(folder => this.unusedImagesOf(folder, screens, devices)).sort(byPath),
       ...deleted.map(folder => this.toDeletedDeviceFolderFinding(folder)).sort(byPath),
       ...known.flatMap(folder => folder.ownFiles.filter(file => isTempFile(file.name) && oldEnough(file)).map(file => toFileFinding('tempFile', file))).sort(byPath),
       ...(await this.listFiles(resolveAppPath(UPLOADS_FOLDER), UPLOADS_FOLDER)).filter(oldEnough).map(file => toFileFinding('oldUpload', file)).sort(byPath),
       ...(await this.findOldFallbackRenders(devices)).sort(byPath),
-      ...await this.findScreensMissingTheirImage(screens),
+      ...await this.findScreensMissingTheirImage(screens, devices),
     ]
 
     this.logger.log(`Stored-files check complete. ${findings.length} finding(s)`)
@@ -199,8 +202,10 @@ export class MaintenanceService {
     return segments[0] === UPLOADS_FOLDER ? resolveAppPath(...segments) : resolveAppPath('public', 'screens', ...segments)
   }
 
-  private unusedImagesOf(folder: DeviceFolder, screens: Screen[]): StoredFileFinding[] {
-    const screenIds = new Set(screens.filter(screen => screen.device.id === folder.deviceId).map(screen => screen.id))
+  /** A folder keeps the images of the Screens its Device shows or owns (its Device Group's included), or the originals of a Device Group's own. */
+  private unusedImagesOf(folder: DeviceFolder, screens: Screen[], devices: Device[]): StoredFileFinding[] {
+    const groupId = devices.find(device => device.id === folder.deviceId)?.deviceGroup?.id
+    const screenIds = new Set(screens.filter(screen => screen.device?.id === folder.deviceId || screen.deviceGroup?.id === folder.deviceId || (groupId !== undefined && screen.deviceGroup?.id === groupId)).map(screen => screen.id))
     return folder.ownFiles
       .filter(file => isScreenImage(file.name) && file.name !== 'mirror.png' && !SYSTEM_FILES.has(file.name) && !isTempFile(file.name))
       .filter(file => !screenIds.has(file.name.replace(/\.(png|original)$/, '')))
@@ -222,24 +227,25 @@ export class MaintenanceService {
    * Plugin Screen, a Mashup and an HTML Screen render on demand, and an
    * External link is fetched.
    */
-  private async findScreensMissingTheirImage(screens: Screen[]): Promise<MissingImageFinding[]> {
-    const candidates = screens
+  private async findScreensMissingTheirImage(screens: Screen[], devices: Device[]): Promise<MissingImageFinding[]> {
+    const shownBy = screens
       .filter(screen => screen.type === 'file' || (screen.type === 'external' && !screen.externalLink))
-      .sort((a, b) => a.device.name.localeCompare(b.device.name) || a.order - b.order)
+      .flatMap(screen => (screen.device ? [screen.device] : devices.filter(device => device.deviceGroup?.id === screen.deviceGroup?.id)).map(device => ({ screen, device })))
+      .sort((a, b) => a.device.name.localeCompare(b.device.name) || a.screen.order - b.screen.order)
     const findings: MissingImageFinding[] = []
 
-    for (const screen of candidates) {
-      if (await fileExists(resolveAppPath('public', 'screens', DEVICES_FOLDER, screen.device.id, `${screen.id}.png`)))
+    for (const { screen, device } of shownBy) {
+      if (await fileExists(resolveAppPath('public', 'screens', DEVICES_FOLDER, device.id, `${screen.id}.png`)))
         continue
       findings.push({
-        id: findingId('missingImage', screen.id),
+        id: findingId('missingImage', screen.device ? screen.id : `${device.id}:${screen.id}`),
         group: 'missingImage',
         screen: {
           id: screen.id,
           name: screen.filename ?? '',
           kind: screen.type,
-          deviceId: screen.device.id,
-          deviceName: screen.device.name,
+          deviceId: device.id,
+          deviceName: device.name,
           order: screen.order,
         },
       })

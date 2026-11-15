@@ -5,6 +5,7 @@ import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import AdmZip from 'adm-zip'
 import { Repository } from 'typeorm'
+import { DeviceGroup } from '../../device-groups/device-group.entity.js'
 import { Palette } from '../../device-models/entities/palette.entity.js'
 import { sleepImageOriginalPath, sleepImagePath } from '../../devices/device-sleep-image.service.js'
 import { Device } from '../../devices/devices.entity.js'
@@ -13,7 +14,7 @@ import { DevicePlugin } from '../../plugins/entities/device-plugin.entity.js'
 import { Plugin } from '../../plugins/entities/plugin.entity.js'
 import { PluginExporterService } from '../../plugins/services/plugin-exporter.service.js'
 import { PluginFieldValuesService } from '../../plugins/services/plugin-field-values.service.js'
-import { screenImagePath } from '../../screens/screen-image-paths.js'
+import { originalImagePath, screenImagePath } from '../../screens/screen-image-paths.js'
 import { Screen } from '../../screens/screens.entity.js'
 import { INSTANCE_SETTINGS_ID, InstanceSettings } from '../../settings/entities/instance-settings.entity.js'
 import { getApiVersion } from '../get-api-version.js'
@@ -22,6 +23,7 @@ import { CONFIG_ARCHIVE_FILES } from '../types.js'
 import {
   buildAssignmentEntry,
   buildDeviceEntry,
+  buildDeviceGroupEntry,
   buildFirmwareEntry,
   buildPaletteEntry,
   buildPluginEntry,
@@ -55,11 +57,12 @@ export class ConfigurationExportService {
     const redact = options.redact ?? false
     const zip = new AdmZip()
 
-    const [plugins, devices, screens, assignments, palettes, firmware, instanceSettings] = await Promise.all([
+    const [plugins, deviceGroups, devices, screens, assignments, palettes, firmware, instanceSettings] = await Promise.all([
       this.pluginRepository.find({ relations: { dataSources: true, templates: true, fields: true } }),
+      this.deviceRepository.manager.getRepository(DeviceGroup).find({ order: { name: 'ASC' } }),
       this.deviceRepository.find(),
-      this.screenRepository.find({ relations: { device: true, plugin: true, schedule: true, mashupConfiguration: { slots: { plugin: true } } } }),
-      this.devicePluginRepository.find({ relations: { device: true, plugin: true } }),
+      this.screenRepository.find({ relations: { device: true, deviceGroup: true, plugin: true, schedule: true, mashupConfiguration: { slots: { plugin: true } } } }),
+      this.devicePluginRepository.find({ relations: { device: true, deviceGroup: true, plugin: true } }),
       this.paletteRepository.find({ where: { kind: 'custom' } }),
       this.firmwareRepository.find({ where: { kind: 'custom' } }),
       this.instanceSettingsRepository.findOneBy({ id: INSTANCE_SETTINGS_ID }),
@@ -74,6 +77,8 @@ export class ConfigurationExportService {
     }
     const fieldValuesByPlugin = await this.fieldValues.storedByPlugin(plugins.map(plugin => plugin.id))
     this.addJson(zip, CONFIG_ARCHIVE_FILES.plugins, plugins.map(plugin => buildPluginEntry(plugin, fieldValuesByPlugin.get(plugin.id) ?? {}, redact)))
+
+    this.addJson(zip, CONFIG_ARCHIVE_FILES.deviceGroups, deviceGroups.map(group => buildDeviceGroupEntry(group)))
 
     const deviceEntries: DeviceManifestEntry[] = []
     for (const device of devices) {
@@ -114,8 +119,15 @@ export class ConfigurationExportService {
     if (screen.type !== 'file') {
       return
     }
-    const imagePath = screenImagePath(screen.device.id, screen.id)
-    if (!existsSync(imagePath)) {
+    const ownerId = screen.deviceGroup?.id ?? screen.device!.id
+    // The retained original travels beside the converted image, so Configuration Import can reconvert it for each Device that shows the Screen.
+    const originalPath = originalImagePath(ownerId, screen.id)
+    if (existsSync(originalPath)) {
+      zip.addFile(`screens/${screen.id}.original`, readFileSync(originalPath))
+    }
+    // A Device Group's Screen has a converted image per member, none of them the Group's own: only a Device's travels.
+    const imagePath = screen.device ? screenImagePath(screen.device.id, screen.id) : null
+    if (!imagePath || !existsSync(imagePath)) {
       return
     }
     zip.addFile(`screens/${screen.id}/${screen.filename ?? `${screen.id}.png`}`, readFileSync(imagePath))

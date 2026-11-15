@@ -7,6 +7,7 @@ import { In, Repository } from 'typeorm'
 import { DeviceSensorsService } from '../device-sensors/device-sensors.service.js'
 import { ApiException } from '../errors/api.exception.js'
 import { DeviceScreen } from '../screens/device-screen.entity.js'
+import { ownedBy, shownOwnerOf } from '../screens/screen-owner.js'
 import { Screen } from '../screens/screens.entity.js'
 import { toDeviceDetail, toDeviceSummary } from './device.mapper.js'
 import { Device } from './devices.entity.js'
@@ -43,7 +44,7 @@ export class DeviceReadsService {
     const [servedScreens, sensors, screenCount] = await Promise.all([
       this.servedScreensById([device]),
       this.deviceSensors.findForDevice(id),
-      this.screenRepository.count({ where: { device: { id } } }),
+      this.screenRepository.count({ where: ownedBy(shownOwnerOf(device)) }),
     ])
     return toDeviceDetail(device, { now: new Date(), servedScreen: this.servedScreenOf(device, servedScreens), sensors, screenCount })
   }

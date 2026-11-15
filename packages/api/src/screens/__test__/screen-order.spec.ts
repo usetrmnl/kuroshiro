@@ -21,7 +21,7 @@ describe('joinEndOfOrder', () => {
       return screen
     })
 
-    const screen = await joinEndOfOrder(asRepository(screensRepo).manager, DEVICE_ID, { type: 'html', html: 'hi' })
+    const screen = await joinEndOfOrder(asRepository(screensRepo).manager, { kind: 'device', id: DEVICE_ID }, { type: 'html', html: 'hi' })
 
     expect(calls).toEqual(['lock', 'read-max', 'save'])
     expect(screensRepo.manager.query).toHaveBeenCalledWith('SELECT 1 FROM "device" WHERE "id" = $1 FOR UPDATE', [DEVICE_ID])
@@ -33,7 +33,7 @@ describe('joinEndOfOrder', () => {
     const screensRepo = createMockTransactionalRepository<Screen>()
     screensRepo.maximum.mockResolvedValue(0)
 
-    await joinEndOfOrder(asRepository(screensRepo).manager, DEVICE_ID, { type: 'html', html: 'hi' })
+    await joinEndOfOrder(asRepository(screensRepo).manager, { kind: 'device', id: DEVICE_ID }, { type: 'html', html: 'hi' })
 
     expect(screensRepo.manager.transaction).toHaveBeenCalledTimes(1)
   })

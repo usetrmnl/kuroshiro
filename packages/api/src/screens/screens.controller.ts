@@ -1,4 +1,4 @@
-import type { ScreenRead } from 'kuroshiro-shared'
+import type { GroupScreen, ScreenRead } from 'kuroshiro-shared'
 import { Body, Controller, Delete, HttpCode, HttpStatus, Param, Patch, Post, Put, StreamableFile, UploadedFile, UseInterceptors } from '@nestjs/common'
 import { LimitedFileInterceptor } from '../uploads/limited-file-interceptor.js'
 import { UPLOAD_LIMITS } from '../uploads/upload-limits.js'
@@ -13,12 +13,12 @@ export class ScreensController {
 
   @Post()
   @UseInterceptors(LimitedFileInterceptor('file', UPLOAD_LIMITS.imageUploadBytes))
-  async add(@Body() body: CreateScreenDto, @UploadedFile() file?: Express.Multer.File): Promise<ScreenRead> {
+  async add(@Body() body: CreateScreenDto, @UploadedFile() file?: Express.Multer.File): Promise<ScreenRead | GroupScreen> {
     return this.screenReads.forScreen(await this.screensService.add(body, file))
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() body: UpdateScreenDto): Promise<ScreenRead> {
+  async update(@Param('id') id: string, @Body() body: UpdateScreenDto): Promise<ScreenRead | GroupScreen> {
     return this.screenReads.forScreen(await this.screensService.update(id, body))
   }
 
@@ -31,13 +31,13 @@ export class ScreensController {
 
   @Put(':id/image')
   @UseInterceptors(LimitedFileInterceptor('file', UPLOAD_LIMITS.imageUploadBytes))
-  async replaceImage(@Param('id') id: string, @UploadedFile() file?: Express.Multer.File): Promise<ScreenRead> {
+  async replaceImage(@Param('id') id: string, @UploadedFile() file?: Express.Multer.File): Promise<ScreenRead | GroupScreen> {
     return this.screenReads.forScreen(await this.screensService.replaceImage(id, file))
   }
 
   @Post(':id/refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Param('id') id: string): Promise<ScreenRead> {
+  async refresh(@Param('id') id: string): Promise<ScreenRead | GroupScreen> {
     return this.screenReads.forScreen(await this.screensService.refresh(id))
   }
 

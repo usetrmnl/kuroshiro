@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { TypeOrmModule } from '@nestjs/typeorm'
+import { DeviceGroup } from '../device-groups/device-group.entity.js'
 import { DeviceModelsModule } from '../device-models/device-models.module.js'
 import { DeviceModel } from '../device-models/entities/device-model.entity.js'
 import { Palette } from '../device-models/entities/palette.entity.js'
@@ -33,6 +34,7 @@ import { ShowcaseSeedService } from './showcase/showcase-seed.service.js'
       PluginField,
       PluginFieldValue,
       Device,
+      DeviceGroup,
       DeviceModel,
       Palette,
       Firmware,

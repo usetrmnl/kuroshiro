@@ -1,9 +1,8 @@
-import type { ApiErrorCode } from 'kuroshiro-shared'
+import type { ApiErrorCode, ScreenOwner } from 'kuroshiro-shared'
 import type { Buffer } from 'node:buffer'
 import type { DeepPartial } from 'typeorm'
 import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity.js'
 import type { DeviceRenderTarget } from '../device-models/device-models.service.js'
-import type { StagedImagePaths } from '../utils/stagedImageUpload.js'
 import { randomUUID } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -11,7 +10,8 @@ import { BadRequestException, HttpStatus, Injectable, Logger } from '@nestjs/com
 import { ConfigService } from '@nestjs/config'
 import { InjectRepository } from '@nestjs/typeorm'
 import { isUUID } from 'class-validator'
-import { Repository } from 'typeorm'
+import { In, Repository } from 'typeorm'
+import { DeviceGroup } from '../device-groups/device-group.entity.js'
 import { DeviceModelsService } from '../device-models/device-models.service.js'
 import { Device } from '../devices/devices.entity.js'
 import { ApiException, ValidationException } from '../errors/api.exception.js'
@@ -20,12 +20,13 @@ import { fileExists } from '../utils/fileExists.js'
 import { getErrorMessage } from '../utils/getErrorMessage.js'
 import { convertToPng, downloadImage, readImageSize } from '../utils/imageUtils.js'
 import { assertPublicUrl, requesterFor } from '../utils/ssrfGuard.js'
-import { assertUploadAllowed, deleteFileIfExists, refusingUnreadableImage, stageUpload, writeUpload } from '../utils/stagedImageUpload.js'
+import { assertUploadAllowed, deleteFileIfExists, refusingUnreadableImage, writeUpload } from '../utils/stagedImageUpload.js'
 import { DeviceScreen } from './device-screen.entity.js'
 import { CreateScreenDto } from './dto/create-screen.dto.js'
 import { UpdateScreenDto } from './dto/update-screen.dto.js'
 import { originalImagePath, screenImagePath } from './screen-image-paths.js'
 import { closeGapInOrder, joinEndOfOrder, writeOrder } from './screen-order.js'
+import { ownedBy, ownerOfRequest, ownerOfScreen } from './screen-owner.js'
 import { Screen } from './screens.entity.js'
 
 type FileFacts = Pick<Screen, 'fileOriginalName' | 'fileWidth' | 'fileHeight' | 'fileBytes' | 'fileUploadedAt'>
@@ -37,6 +38,8 @@ const EDITABLE_FIELDS: Record<Screen['type'], ReadonlyArray<keyof UpdateScreenDt
   mashup: ['name'],
   plugin: [],
 }
+
+type Refuse = <T>(operation: () => Promise<T>) => Promise<T>
 
 /** An External link's own columns as edited, and whether its kept image was fetched again for them. */
 interface ExternalLinkChange {
@@ -61,26 +64,47 @@ export class ScreensService {
     private readonly deviceModels: DeviceModelsService,
   ) {}
 
-  /** Adds an External link, File or HTML Screen at the end of the Device's Order and answers its id. */
+  /** Adds an External link, File or HTML Screen at the end of the owner's Order and answers its id. */
   async add(input: CreateScreenDto, file?: Express.Multer.File): Promise<string> {
-    this.logger.log(`Adding ${input.kind} screen to device ${input.deviceId}`)
+    const owner = ownerOfRequest(input)
+    if (!owner)
+      throw new ValidationException([{ path: 'owner', message: 'A Screen needs an owner.' }])
+    this.logger.log(`Adding ${input.kind} screen to ${owner.kind} ${owner.id}`)
     this.assertFileMatchesKind(input, file)
-    const device = await this.devicesRepository.findOneBy({ id: input.deviceId })
-    if (!device)
-      throw new ApiException(HttpStatus.NOT_FOUND, 'device-not-found', 'Device not found', { id: input.deviceId })
+    const targets = await this.targetsOf(owner)
 
     const id = randomUUID()
     const dither = input.dither ?? true
-    const content = await this.prepareContent(input, device, id, dither, file)
+    const content = await this.prepareContent(input, owner, targets, id, dither, file)
     try {
-      await joinEndOfOrder(this.screensRepository.manager, device.id, { id, type: input.kind, filename: input.name, dither, ...content })
+      await joinEndOfOrder(this.screensRepository.manager, owner, { id, type: input.kind, filename: input.name, dither, ...content })
     }
     catch (err) {
-      await this.deleteImages(device.id, id)
+      await this.deleteImages(owner.id, targets.map(target => target.id), id)
       throw err
     }
-    this.logger.log(`Screen created with id: ${id} for device: ${device.id}`)
+    this.logger.log(`Screen created with id: ${id} for ${owner.kind}: ${owner.id}`)
     return id
+  }
+
+  /** The Devices a loaded Screen is drawn for: its owner Device, or its Device Group's members. */
+  private async targetsOfScreen(screen: Screen): Promise<Device[]> {
+    if (screen.device)
+      return [screen.device]
+    return this.devicesRepository.find({ where: { deviceGroup: { id: screen.deviceGroup!.id } } })
+  }
+
+  /** The Devices an owner's Screens are drawn for: the Device itself, or the members of the Device Group. Refuses an owner that does not exist. */
+  private async targetsOf(owner: ScreenOwner): Promise<Device[]> {
+    if (owner.kind === 'device') {
+      const device = isUUID(owner.id) ? await this.devicesRepository.findOneBy({ id: owner.id }) : null
+      if (!device)
+        throw new ApiException(HttpStatus.NOT_FOUND, 'device-not-found', 'Device not found', { id: owner.id })
+      return [device]
+    }
+    if (!isUUID(owner.id) || !await this.devicesRepository.manager.getRepository(DeviceGroup).existsBy({ id: owner.id }))
+      throw new ApiException(HttpStatus.NOT_FOUND, 'device-group-not-found', 'Device Group not found', { id: owner.id })
+    return this.devicesRepository.find({ where: { deviceGroup: { id: owner.id } } })
   }
 
   private assertFileMatchesKind(input: CreateScreenDto, file?: Express.Multer.File): void {
@@ -93,23 +117,23 @@ export class ScreensService {
   }
 
   /** The kind's own columns, with its image stored under the given Screen id when the kind keeps one. */
-  private async prepareContent(input: CreateScreenDto, device: Device, screenId: string, dither: boolean, file?: Express.Multer.File): Promise<DeepPartial<Screen>> {
+  private async prepareContent(input: CreateScreenDto, owner: ScreenOwner, targets: Device[], screenId: string, dither: boolean, file?: Express.Multer.File): Promise<DeepPartial<Screen>> {
     switch (input.kind) {
       case 'html':
         return { html: input.html }
       case 'external':
         if (input.fetchManual)
-          await this.stageImage(device, screenId).store(staged => this.fetchKeptImage(device, input.url!, staged, dither))
+          await this.storeImages(owner, targets, screenId, dither, original => this.fetchOriginal(input.url!, original), this.refuseFetchedImage)
         return { externalLink: input.url, fetchManual: input.fetchManual }
       case 'file':
-        return this.stageImage(device, screenId).store(staged => this.convertUpload(device, file!, staged, dither))
+        return this.storeImages(owner, targets, screenId, dither, original => this.writeUploadedOriginal(file!, original), this.refuseUnreadable)
     }
   }
 
   /** Changes the fields of a Screen that belong to its kind; the Order and the Active Screen stay as they are. */
   async update(id: string, input: UpdateScreenDto): Promise<string> {
     this.logger.log(`Updating screen ${id}`)
-    const screen = await this.findScreenWithDevice(id)
+    const screen = await this.findScreenWithOwner(id)
     this.assertFieldsBelongToKind(screen, input)
 
     const external = screen.type === 'external' ? await this.changeExternalLink(screen, input) : null
@@ -118,7 +142,7 @@ export class ScreensService {
     if (Object.keys(changes).length > 0)
       await this.screensRepository.update({ id }, changes)
     if (Object.keys(rendered).length > 0)
-      await this.updateRecord(screen, rendered)
+      await this.updateRecords(screen, rendered)
     await this.reconvertForDither(screen, input, { fetchManual: changes.fetchManual as boolean | undefined, regenerated: rendered.generatedAt !== undefined })
     return id
   }
@@ -132,7 +156,7 @@ export class ScreensService {
     }
   }
 
-  /** What the edit does to the Device's record of the Screen: an edited HTML drops the remembered Render Signal, and a new render or fetch moves the render time. */
+  /** What the edit does to the records of the Screen: an edited HTML drops the remembered Render Signal, and a new render or fetch moves the render time. */
   private recordChanges(screen: Screen, input: UpdateScreenDto, external: ExternalLinkChange | null): QueryDeepPartialEntity<DeviceScreen> {
     return {
       ...(input.html !== undefined && { renderSignal: null }),
@@ -151,7 +175,9 @@ export class ScreensService {
     const kept = screen.type === 'file' || (screen.type === 'external' && (changes.fetchManual ?? screen.fetchManual))
     if (input.dither === undefined || input.dither === screen.dither || changes.regenerated || !kept)
       return
-    await this.reconvertScreen(screen.device, await this.deviceModels.renderTargetFor(screen.device), { ...screen, dither: input.dither })
+    const owner = ownerOfScreen(screen)
+    for (const target of await this.targetsOfScreen(screen))
+      await this.reconvertScreen(target, await this.deviceModels.renderTargetFor(target), { ...screen, dither: input.dither }, owner.id)
   }
 
   /** The columns of an External link's own fields, its kept image fetched first when the URL or the choice to keep it changed. */
@@ -159,8 +185,10 @@ export class ScreensService {
     const url = input.url ?? screen.externalLink!
     const fetchManual = input.fetchManual ?? screen.fetchManual
     const needsFetch = fetchManual && (url !== screen.externalLink || !screen.fetchManual)
-    if (needsFetch)
-      await this.stageImage(screen.device, screen.id).store(staged => this.fetchKeptImage(screen.device, url, staged, input.dither ?? screen.dither))
+    if (needsFetch) {
+      const owner = ownerOfScreen(screen)
+      await this.storeImages(owner, await this.targetsOfScreen(screen), screen.id, input.dither ?? screen.dither, original => this.fetchOriginal(url, original), this.refuseFetchedImage)
+    }
     return { columns: { externalLink: url, fetchManual }, fetched: needsFetch }
   }
 
@@ -171,16 +199,22 @@ export class ScreensService {
       throw new ApiException(HttpStatus.BAD_REQUEST, 'screen-field-not-for-kind', `A ${screen.type} Screen has no ${misplaced.join(', ')}.`, { fields: misplaced })
   }
 
-  /** The image `file` would become for the Screen's Device, as PNG bytes; nothing of the Screen changes. */
+  /** The image `file` would become for the Screen's first Device (a Group's first member), as PNG bytes; nothing of the Screen changes. */
   async previewImage(id: string, file?: Express.Multer.File): Promise<Buffer> {
     const screen = await this.findFileScreen(id, file)
-    const staged = this.stageImage(screen.device, randomUUID())
+    const [device] = await this.targetsOfScreen(screen)
+    const token = randomUUID()
+    const target = await this.deviceModels.renderTargetFor(device ?? {})
+    const originalPath = originalImagePath(ownerOfScreen(screen).id, `${token}.preview`)
+    const imagePath = screenImagePath(device?.id ?? ownerOfScreen(screen).id, `${token}.preview`)
     try {
-      await this.convertUpload(screen.device, file!, staged, screen.dither)
-      return await fs.promises.readFile(staged.imagePath)
+      await this.writeUploadedOriginal(file!, originalPath)
+      await this.refuseUnreadable(() => convertToPng(originalPath, imagePath, target, this.logger, { dither: screen.dither }))
+      return await fs.promises.readFile(imagePath)
     }
     finally {
-      await staged.discard()
+      await deleteFileIfExists(originalPath, this.logger)
+      await deleteFileIfExists(imagePath, this.logger)
     }
   }
 
@@ -188,52 +222,84 @@ export class ScreensService {
   async replaceImage(id: string, file?: Express.Multer.File): Promise<string> {
     this.logger.log(`Replacing the image of screen ${id}`)
     const screen = await this.findFileScreen(id, file)
-    const facts = await this.stageImage(screen.device, id).store(staged => this.convertUpload(screen.device, file!, staged, screen.dither))
+    const owner = ownerOfScreen(screen)
+    const facts = await this.storeImages(owner, await this.targetsOfScreen(screen), id, screen.dither, original => this.writeUploadedOriginal(file!, original), this.refuseUnreadable)
     await this.screensRepository.update({ id }, facts)
-    await this.updateRecord(screen, { generatedAt: new Date() })
+    await this.updateRecords(screen, { generatedAt: new Date() })
     return id
   }
 
   private async findFileScreen(id: string, file?: Express.Multer.File): Promise<Screen> {
-    const screen = await this.findScreenWithDevice(id)
+    const screen = await this.findScreenWithOwner(id)
     if (screen.type !== 'file')
       throw new ApiException(HttpStatus.BAD_REQUEST, 'screen-field-not-for-kind', 'Only a File Screen has an image to replace.')
     assertUploadAllowed(this.configService, file, 'A File Screen needs a file.')
     return screen
   }
 
-  /** Where an image is written before it replaces the stored one, so a failed fetch or conversion leaves the stored one alone. */
-  private stageImage(device: Device, screenId: string) {
-    return stageUpload(originalImagePath(device.id, screenId), screenImagePath(device.id, screenId), this.logger)
+  /**
+   * Stores a Screen's original under its owner and its converted image for each
+   * Device that shows it, where an image is first written beside the final one
+   * so a failed fetch or conversion leaves the stored images alone. `writeOriginal`
+   * fills the staged original and answers what the caller keeps; `refuse` words a
+   * failure of either step.
+   */
+  private async storeImages<T>(owner: ScreenOwner, targets: Device[], screenId: string, dither: boolean, writeOriginal: (originalPath: string) => Promise<T>, refuse: Refuse): Promise<T> {
+    const token = randomUUID()
+    const originalPath = originalImagePath(owner.id, screenId)
+    const stagedOriginal = path.join(path.dirname(originalPath), `${token}.staging.original`)
+    const staged = targets.map(target => ({ target, final: screenImagePath(target.id, screenId), staged: path.join(path.dirname(screenImagePath(target.id, screenId)), `${token}.staging.png`) }))
+    try {
+      await fs.promises.mkdir(path.dirname(originalPath), { recursive: true })
+      const result = await writeOriginal(stagedOriginal)
+      for (const { target, staged: stagedImage } of staged) {
+        await fs.promises.mkdir(path.dirname(stagedImage), { recursive: true })
+        await refuse(async () => convertToPng(stagedOriginal, stagedImage, await this.deviceModels.renderTargetFor(target), this.logger, { dither }))
+      }
+      await fs.promises.rename(stagedOriginal, originalPath)
+      for (const { final, staged: stagedImage } of staged)
+        await fs.promises.rename(stagedImage, final)
+      return result
+    }
+    catch (err) {
+      await deleteFileIfExists(stagedOriginal, this.logger)
+      for (const { staged: stagedImage } of staged)
+        await deleteFileIfExists(stagedImage, this.logger)
+      throw err
+    }
   }
 
-  private async fetchKeptImage(device: Device, url: string, staged: StagedImagePaths, dither: boolean): Promise<void> {
-    const demoMode = this.configService.get<boolean>('demo_mode')
-    if (demoMode)
-      assertPublicUrl(url)
-    const target = await this.deviceModels.renderTargetFor(device)
+  private readonly refuseUnreadable: Refuse = operation => refusingUnreadableImage(this.logger, operation)
+
+  private readonly refuseFetchedImage: Refuse = async (operation) => {
     try {
-      await downloadImage(url, staged.originalPath, this.logger, requesterFor(demoMode))
+      return await operation()
     }
     catch (err) {
-      const reason = getErrorMessage(err)
-      throw this.refuseImage(err, HttpStatus.UNPROCESSABLE_ENTITY, 'image-fetch-failed', `The image could not be fetched: ${reason}`, { reason })
-    }
-    try {
-      await convertToPng(staged.originalPath, staged.imagePath, target, this.logger, { dither })
-    }
-    catch (err) {
+      if (err instanceof ApiException)
+        throw err
       const reason = 'The address did not answer with an image Kuroshiro can read.'
       throw this.refuseImage(err, HttpStatus.UNPROCESSABLE_ENTITY, 'image-fetch-failed', reason, { reason })
     }
   }
 
-  private async convertUpload(device: Device, file: Express.Multer.File, staged: StagedImagePaths, dither: boolean): Promise<FileFacts> {
-    const target = await this.deviceModels.renderTargetFor(device)
-    await writeUpload(staged.originalPath, file)
-    return refusingUnreadableImage(this.logger, async () => {
-      const { width, height } = await readImageSize(staged.originalPath, this.logger)
-      await convertToPng(staged.originalPath, staged.imagePath, target, this.logger, { dither })
+  private async fetchOriginal(url: string, originalPath: string): Promise<void> {
+    const demoMode = this.configService.get<boolean>('demo_mode')
+    if (demoMode)
+      assertPublicUrl(url)
+    try {
+      await downloadImage(url, originalPath, this.logger, requesterFor(demoMode))
+    }
+    catch (err) {
+      const reason = getErrorMessage(err)
+      throw this.refuseImage(err, HttpStatus.UNPROCESSABLE_ENTITY, 'image-fetch-failed', `The image could not be fetched: ${reason}`, { reason })
+    }
+  }
+
+  private async writeUploadedOriginal(file: Express.Multer.File, originalPath: string): Promise<FileFacts> {
+    await writeUpload(originalPath, file)
+    return this.refuseUnreadable(async () => {
+      const { width, height } = await readImageSize(originalPath, this.logger)
       return { fileOriginalName: file.originalname, fileWidth: width, fileHeight: height, fileBytes: file.size, fileUploadedAt: new Date() }
     })
   }
@@ -246,84 +312,113 @@ export class ScreensService {
 
   async delete(id: string): Promise<void> {
     this.logger.log(`Deleting screen ${id}`)
-    const screen = await this.findScreenWithDevice(id)
-    const deviceId = screen.device.id
-    await this.deleteImages(deviceId, id)
+    const screen = await this.findScreenWithOwner(id)
+    const owner = ownerOfScreen(screen)
+    await this.deleteImages(owner.id, await this.devicesShowing(screen), id)
     await this.screensRepository.manager.transaction(async (manager) => {
       await manager.getRepository(Screen).delete(id)
       if (screen.devicePluginId)
         await manager.getRepository(DevicePlugin).delete(screen.devicePluginId)
-      await closeGapInOrder(manager, deviceId)
+      await closeGapInOrder(manager, owner)
     })
     this.logger.log(`Screen deleted: ${id}`)
   }
 
-  /** Puts a Device's Screens in the given Order, which has to name each of them once. */
-  async reorder(deviceId: string, screenIds: string[]): Promise<void> {
-    this.logger.log(`Reordering screens for device ${deviceId}`)
-    const device = isUUID(deviceId) ? await this.devicesRepository.findOneBy({ id: deviceId }) : null
-    if (!device)
-      throw new ApiException(HttpStatus.NOT_FOUND, 'device-not-found', 'Device not found', { id: deviceId })
+  /** The Devices that have, or would have, a converted image of the Screen: its owner Device, or its Group's members and any former one with a record. */
+  private async devicesShowing(screen: Screen): Promise<string[]> {
+    const records = await this.deviceScreensRepository.find({ where: { screen: { id: screen.id } }, relations: { device: true } })
+    const ids = new Set(records.map(record => record.device.id))
+    if (screen.deviceGroup)
+      (await this.devicesRepository.find({ where: { deviceGroup: { id: screen.deviceGroup.id } } })).forEach(member => ids.add(member.id))
+    else if (screen.device)
+      ids.add(screen.device.id)
+    return [...ids]
+  }
 
-    const screens = await this.screensRepository.find({ where: { device: { id: deviceId } } })
+  /** Removes the images of every Screen a Device Group owns, ahead of the Group's delete, which cascades to the Screens. */
+  async deleteFilesOfGroup(groupId: string): Promise<void> {
+    const screens = await this.screensRepository.find({ where: { deviceGroup: { id: groupId } }, relations: { deviceGroup: true } })
+    for (const screen of screens)
+      await this.deleteImages(groupId, await this.devicesShowing(screen), screen.id)
+  }
+
+  /** Puts an owner's Screens in the given Order, which has to name each of them once. */
+  async reorder(owner: ScreenOwner, screenIds: string[]): Promise<void> {
+    this.logger.log(`Reordering screens for ${owner.kind} ${owner.id}`)
+    await this.targetsOf(owner)
+
+    const screens = await this.screensRepository.find({ where: ownedBy(owner) })
     const screensById = new Map(screens.map(screen => [screen.id, screen]))
     const ordered = screenIds.flatMap(screenId => screensById.get(screenId) ?? [])
     if (new Set(screenIds).size !== screenIds.length || screens.length !== screenIds.length || ordered.length !== screens.length)
-      throw new ApiException(HttpStatus.BAD_REQUEST, 'order-not-a-permutation', 'screenIds must name each of the Device\'s Screens exactly once.')
+      throw new ApiException(HttpStatus.BAD_REQUEST, 'order-not-a-permutation', `screenIds must name each of the ${owner.kind === 'device' ? 'Device' : 'Device Group'}'s Screens exactly once.`)
 
     await this.screensRepository.manager.transaction(manager => writeOrder(manager, ordered))
-    this.logger.log(`Reordered screens for device ${deviceId}`)
+    this.logger.log(`Reordered screens for ${owner.kind} ${owner.id}`)
   }
 
   /** Fetches a kept External link's image again; the earlier image stays when the fetch fails. */
   async refresh(id: string): Promise<string> {
     this.logger.log(`Refetching screen: ${id}`)
-    const screen = await this.findScreenWithDevice(id)
+    const screen = await this.findScreenWithOwner(id)
     if (screen.type !== 'external' || !screen.fetchManual)
       throw new BadRequestException('Only an External link that keeps its image can be refreshed.')
-    await this.stageImage(screen.device, id).store(staged => this.fetchKeptImage(screen.device, screen.externalLink!, staged, screen.dither))
-    await this.updateRecord(screen, { generatedAt: new Date() })
+    const owner = ownerOfScreen(screen)
+    await this.storeImages(owner, await this.targetsOfScreen(screen), id, screen.dither, original => this.fetchOriginal(screen.externalLink!, original), this.refuseFetchedImage)
+    await this.updateRecords(screen, { generatedAt: new Date() })
     return id
   }
 
   /**
-   * Has every Screen of a device drawn again for its current model and palette:
-   * regenerates each stored image (uploads and cached external images) from the
-   * retained original where one exists and from the previous PNG otherwise, and
-   * moves the render time of HTML, Plugin and Mashup Screens, dropping their
-   * cached output, so `/display` serves them under a new filename (ADR-0031).
+   * Has every Screen a device can show drawn again for its current model and
+   * palette: regenerates each stored image (uploads and cached external images)
+   * from the retained original where one exists and from the previous PNG
+   * otherwise, and moves the render time of HTML, Plugin and Mashup Screens,
+   * dropping their cached output, so `/display` serves them under a new filename
+   * (ADR-0031). The Device's own Screens and its Device Group's are both drawn
+   * again, for this Device only; no other member's image is touched.
    * Answers how many stored images were converted.
    */
   async redrawForRenderTarget(device: Device): Promise<number> {
-    await this.discardRenders(device)
-    return this.reconvertImageScreens(device)
+    const owners = this.ownersOf(device)
+    await this.discardRenders(device, owners)
+    return this.reconvertImageScreens(device, owners)
   }
 
-  /** Drops what the HTML, Plugin and Mashup Screens of a device were rendered to, so the next poll renders them afresh under a new filename. */
-  private async discardRenders(device: Device): Promise<void> {
-    await this.deviceScreensRepository.createQueryBuilder()
-      .update()
-      .set({ generatedAt: new Date(), cachedPluginOutput: null, renderSignal: null })
-      .where(`"deviceId" = :deviceId AND "screenId" IN (SELECT "id" FROM "screen" WHERE "type" IN (:...types))`, { deviceId: device.id, types: RENDERED_SCREEN_TYPES })
-      .execute()
+  private ownersOf(device: Device): ScreenOwner[] {
+    const own: ScreenOwner = { kind: 'device', id: device.id }
+    return device.deviceGroup ? [own, { kind: 'deviceGroup', id: device.deviceGroup.id }] : [own]
   }
 
-  private async reconvertImageScreens(device: Device): Promise<number> {
-    const screens = await this.screensRepository.find({ where: { device: { id: device.id } } })
+  /** Drops what the HTML, Plugin and Mashup Screens a device can show were rendered to, so the next poll renders them afresh under a new filename. */
+  private async discardRenders(device: Device, owners: ScreenOwner[]): Promise<void> {
+    const screens = await this.screensRepository.find({ where: owners.map(ownedBy).map(where => ({ ...where, type: In(RENDERED_SCREEN_TYPES) })), select: { id: true } })
+    if (screens.length === 0)
+      return
+    await this.deviceScreensRepository.update(
+      { device: { id: device.id }, screen: { id: In(screens.map(screen => screen.id)) } },
+      { generatedAt: new Date(), cachedPluginOutput: null, renderSignal: null },
+    )
+  }
+
+  private async reconvertImageScreens(device: Device, owners: ScreenOwner[]): Promise<number> {
     const target = await this.deviceModels.renderTargetFor(device)
     let converted = 0
-    for (const screen of screens.filter(s => s.type === 'file' || (s.type === 'external' && s.fetchManual))) {
-      if (await this.reconvertScreen(device, target, screen))
-        converted++
+    for (const owner of owners) {
+      const screens = await this.screensRepository.find({ where: ownedBy(owner) })
+      for (const screen of screens.filter(s => s.type === 'file' || (s.type === 'external' && s.fetchManual))) {
+        if (await this.reconvertScreen(device, target, screen, owner.id))
+          converted++
+      }
     }
     this.logger.log(`Reconverted ${converted} image screen(s) for device ${device.id} as ${target.model.name}/${target.palette.id}`)
     return converted
   }
 
   /** Converts one Screen's image again for the target, with the Screen's own Dithering; `false` when there was nothing to convert or it failed. */
-  private async reconvertScreen(device: Device, target: DeviceRenderTarget, screen: Screen): Promise<boolean> {
+  private async reconvertScreen(device: Device, target: DeviceRenderTarget, screen: Screen, ownerId: string): Promise<boolean> {
     const outputPath = screenImagePath(device.id, screen.id)
-    const originalPath = originalImagePath(device.id, screen.id)
+    const originalPath = originalImagePath(ownerId, screen.id)
     const sourcePath = await fileExists(originalPath) ? originalPath : outputPath
     if (!await fileExists(sourcePath)) {
       this.logger.warn(`No image to reconvert for screen ${screen.id}`)
@@ -331,6 +426,7 @@ export class ScreensService {
     }
     const tempPath = path.join(path.dirname(outputPath), `tmp-${screen.id}.png`)
     try {
+      await fs.promises.mkdir(path.dirname(outputPath), { recursive: true })
       await convertToPng(sourcePath, tempPath, target, this.logger, { dither: screen.dither })
       await fs.promises.rename(tempPath, outputPath)
       await this.deviceScreensRepository.update({ device: { id: device.id }, screen: { id: screen.id } }, { generatedAt: new Date() })
@@ -343,20 +439,21 @@ export class ScreensService {
     }
   }
 
-  /** Writes the Device's record of the Screen, the Device being the one that owns the Screen. */
-  private async updateRecord(screen: Screen, values: QueryDeepPartialEntity<DeviceScreen>): Promise<void> {
-    await this.deviceScreensRepository.update({ device: { id: screen.device.id }, screen: { id: screen.id } }, values)
+  /** Writes every Device's record of the Screen. */
+  private async updateRecords(screen: Screen, values: QueryDeepPartialEntity<DeviceScreen>): Promise<void> {
+    await this.deviceScreensRepository.update({ screen: { id: screen.id } }, values)
   }
 
-  private async findScreenWithDevice(id: string): Promise<Screen> {
-    const screen = isUUID(id) ? await this.screensRepository.findOne({ where: { id }, relations: { device: true } }) : null
+  private async findScreenWithOwner(id: string): Promise<Screen> {
+    const screen = isUUID(id) ? await this.screensRepository.findOne({ where: { id }, relations: { device: true, deviceGroup: true } }) : null
     if (!screen)
       throw new ApiException(HttpStatus.NOT_FOUND, 'screen-not-found', 'Screen not found', { id })
     return screen
   }
 
-  private async deleteImages(deviceId: string, screenId: string): Promise<void> {
-    await deleteFileIfExists(screenImagePath(deviceId, screenId), this.logger)
-    await deleteFileIfExists(originalImagePath(deviceId, screenId), this.logger)
+  private async deleteImages(ownerId: string, deviceIds: string[], screenId: string): Promise<void> {
+    for (const deviceId of deviceIds)
+      await deleteFileIfExists(screenImagePath(deviceId, screenId), this.logger)
+    await deleteFileIfExists(originalImagePath(ownerId, screenId), this.logger)
   }
 }

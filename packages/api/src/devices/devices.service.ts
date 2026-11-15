@@ -3,6 +3,7 @@ import type { UpdateDeviceDto } from './dto/update-device.dto.js'
 import { HttpStatus, Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { isUUID } from 'class-validator'
+import { DeviceGroupMembershipService } from '../device-groups/device-group-membership.service.js'
 import { DeviceModelsService } from '../device-models/device-models.service.js'
 import { PaletteSelectionService } from '../device-models/palette-selection.service.js'
 import { ApiException } from '../errors/api.exception.js'
@@ -36,6 +37,7 @@ export class DevicesService {
     private firmwareService: FirmwareService,
     private screensService: ScreensService,
     private deviceSleepImage: DeviceSleepImageService,
+    private deviceGroupMembership: DeviceGroupMembershipService,
   ) {}
 
   async findById(id: string): Promise<Device | null> {
@@ -55,7 +57,7 @@ export class DevicesService {
     const dbDevice = await this.findByIdOrNull(id)
     if (!dbDevice)
       return null
-    const { deviceModelName, paletteId, targetFirmwareId, ...attributes } = changes
+    const { deviceModelName, paletteId, targetFirmwareId, deviceGroupId, ...attributes } = changes
     const pushWasPending = dbDevice.updateFirmware
     Object.assign(dbDevice, attributes)
     assertSleepWindowConfigured(dbDevice)
@@ -66,6 +68,8 @@ export class DevicesService {
     assertPushCanBeServed(dbDevice, changes.updateFirmware)
     assertApikeyRotationAllowed(dbDevice)
     assertWipeAllowed(dbDevice)
+    if (deviceGroupId !== undefined)
+      await this.deviceGroupMembership.setGroup(dbDevice, deviceGroupId)
     const saved = await this.deviceRepository.save(dbDevice)
     if (renderTargetChanged(before, saved)) {
       await this.screensService.redrawForRenderTarget(saved)

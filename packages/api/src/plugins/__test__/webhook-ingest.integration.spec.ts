@@ -91,6 +91,7 @@ describe('webhook ingest integration', () => {
     }
 
     const screenRepo = {
+      find: vi.fn(async () => []),
       manager: { getRepository: (name: string) => (name === 'MashupSlot' ? mashupSlotRepo : null) },
     }
 

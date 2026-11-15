@@ -1,11 +1,14 @@
 import type { Relation } from 'typeorm'
+import type { DeviceGroup } from '../device-groups/device-group.entity.js'
 import type { Device } from '../devices/devices.entity.js'
 import type { MashupConfiguration } from '../mashup/entities/mashup-configuration.entity.js'
 import type { Plugin } from '../plugins/entities/plugin.entity.js'
 import type { Schedule } from '../schedule/schedule.entity.js'
-import { Column, Entity, ManyToOne, OneToOne, PrimaryGeneratedColumn } from 'typeorm'
+import { Check, Column, Entity, ManyToOne, OneToOne, PrimaryGeneratedColumn } from 'typeorm'
 
+/** Owned by exactly one Device or one Device Group (ADR-0078). */
 @Entity()
+@Check('CHK_screen_exactly_one_owner', '("deviceId" IS NULL) <> ("deviceGroupId" IS NULL)')
 export class Screen {
   @PrimaryGeneratedColumn('uuid')
   id: string
@@ -49,8 +52,11 @@ export class Screen {
   @Column({ type: 'int' })
   order: number
 
-  @ManyToOne('Device', { onDelete: 'CASCADE' })
-  device: Relation<Device>
+  @ManyToOne('Device', { onDelete: 'CASCADE', nullable: true })
+  device?: Relation<Device> | null
+
+  @ManyToOne('DeviceGroup', { onDelete: 'CASCADE', nullable: true })
+  deviceGroup?: Relation<DeviceGroup> | null
 
   @ManyToOne('Plugin', { onDelete: 'CASCADE', nullable: true })
   plugin?: Relation<Plugin> | null

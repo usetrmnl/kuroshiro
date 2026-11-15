@@ -11,6 +11,7 @@ export type MergeStrategy = typeof MERGE_STRATEGIES[number]
 export interface PluginPlace {
   screenId: string
   name: string
+  /** The Device, or the Device Group the Screen is on (ADR-0078): its id and name. */
   deviceId: string
   deviceName: string
 }
@@ -33,7 +34,7 @@ export interface PluginSummary {
   name: string
   kind: PluginKind
   sourceRecipeId: string | null
-  /** The Devices the Plugin is assigned to, by name. */
+  /** The Devices and Device Groups the Plugin is assigned to, by name. */
   devices: Array<{ id: string, name: string }>
   mashups: PluginPlace[]
   /** `0` for a Webhook-kind Plugin. */
@@ -120,13 +121,14 @@ export interface PluginFieldRead {
 export type FieldValueRead = { secret: false, value: string | null } | { secret: true, set: boolean }
 
 export interface PluginAssignmentRead {
+  /** The id of the Device, or of the Device Group when `ownerKind` says so. */
   deviceId: string
   deviceName: string
   screenId: string
   order: number
   /** How many Screens the Device has, the Plugin Screen included. */
   screenCount: number
-  /** `null` on a mirrored Device, and for a Screen waiting its turn. */
+  /** `null` on a mirrored Device, for a Screen waiting its turn, and on a Device Group, whose members each have their own. */
   state: ScreenState | null
 }
 

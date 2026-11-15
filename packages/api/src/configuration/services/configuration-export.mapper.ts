@@ -1,3 +1,4 @@
+import type { DeviceGroup } from '../../device-groups/device-group.entity.js'
 import type { Palette } from '../../device-models/entities/palette.entity.js'
 import type { Device } from '../../devices/devices.entity.js'
 import type { Firmware } from '../../firmware/entities/firmware.entity.js'
@@ -11,6 +12,7 @@ import type { Screen } from '../../screens/screens.entity.js'
 import type { InstanceSettings } from '../../settings/entities/instance-settings.entity.js'
 import type {
   AssignmentManifestEntry,
+  DeviceGroupManifestEntry,
   DeviceManifestEntry,
   FirmwareManifestEntry,
   InstanceSettingsManifestEntry,
@@ -85,6 +87,10 @@ function redactSecretFieldValues(plugin: Plugin, fieldValues: StoredFieldValues)
   )
 }
 
+export function buildDeviceGroupEntry(group: DeviceGroup): DeviceGroupManifestEntry {
+  return { id: group.id, name: group.name }
+}
+
 export function buildDeviceEntry(device: Device, redact: boolean): DeviceManifestEntry {
   return {
     id: device.id,
@@ -99,6 +105,7 @@ export function buildDeviceEntry(device: Device, redact: boolean): DeviceManifes
     ...buildDeviceMirrorFields(device, redact),
     ...buildDeviceSleepFields(device),
     targetFirmwareId: device.targetFirmware?.id ?? null,
+    deviceGroupId: device.deviceGroup?.id ?? null,
   }
 }
 
@@ -122,7 +129,8 @@ function buildDeviceSleepFields(device: Device): Pick<DeviceManifestEntry, 'slee
 export function buildScreenEntry(screen: Screen): ScreenManifestEntry {
   return {
     id: screen.id,
-    deviceId: screen.device.id,
+    deviceId: screen.device?.id ?? null,
+    owner: screen.deviceGroup ? { kind: 'deviceGroup', id: screen.deviceGroup.id } : { kind: 'device', id: screen.device!.id },
     type: screen.type,
     order: screen.order,
     filename: screen.filename ?? null,
@@ -177,7 +185,8 @@ function buildMashupEntry(mashup: MashupConfiguration): MashupConfigurationManif
 export function buildAssignmentEntry(assignment: DevicePlugin): AssignmentManifestEntry {
   return {
     id: assignment.id,
-    deviceId: assignment.device.id,
+    deviceId: assignment.device?.id ?? null,
+    deviceGroupId: assignment.deviceGroup?.id ?? null,
     pluginId: assignment.plugin.id,
     order: assignment.order,
     isActive: assignment.isActive,

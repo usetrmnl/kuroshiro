@@ -1,12 +1,13 @@
 import type { ScreenFacts } from '../screen.mapper.js'
 import { describe, expect, it } from 'vitest'
 import { makeMashupConfiguration, makeMashupSlot, makePlugin, makeSchedule, makeScreen } from '../../test/fixtures.js'
-import { toScreenRead } from '../screen.mapper.js'
+import { toGroupScreen, toScreenRead } from '../screen.mapper.js'
 
 const RENDERED_AT = new Date('2026-03-01T09:30:00.000Z')
 const UPLOADED_AT = new Date('2026-02-15T08:00:00.000Z')
 
 const WAITING_ITS_TURN: ScreenFacts = {
+  readOnly: false,
   deviceId: 'device-1',
   state: { state: null, stateCause: null, picked: false },
   renderSignal: null,
@@ -23,6 +24,7 @@ describe('toScreenRead', () => {
     expect(JSON.parse(JSON.stringify(toScreenRead(screen, WAITING_ITS_TURN)))).toEqual({
       id: 'screen-photo',
       deviceId: 'device-1',
+      readOnly: false,
       kind: 'file',
       name: 'Photo',
       order: 2,
@@ -160,5 +162,24 @@ describe('toScreenRead', () => {
     const screen = makeScreen({ type: 'html', filename: 'Note', html: '<p>Hi</p>' })
 
     expect(toScreenRead(screen, WAITING_ITS_TURN)).toMatchObject({ kind: 'html', html: '<p>Hi</p>', file: null })
+  })
+})
+
+describe('toGroupScreen', () => {
+  it('reads the Screen without any one Device\'s state, with each member\'s state beside it', () => {
+    const screen = makeScreen({ id: 'screen-note', type: 'html', filename: 'Note', html: '<p>Hi</p>', order: 2 })
+
+    const read = toGroupScreen(screen, 'group-1', { requiredFieldEmpty: false, fetchAlertFiring: false }, [
+      { deviceId: 'device-1', state: { state: 'active', stateCause: null, picked: false }, isActive: true, renderSignal: null, generatedAt: new Date('2026-10-03T07:31:00.000Z') },
+      { deviceId: 'device-2', state: { state: 'upNext', stateCause: null, picked: true }, isActive: false, renderSignal: 'skip', generatedAt: null },
+    ])
+
+    expect(read).toMatchObject({ id: 'screen-note', deviceGroupId: 'group-1', kind: 'html', name: 'Note', order: 2, html: '<p>Hi</p>' })
+    expect(read).not.toHaveProperty('state')
+    expect(read).not.toHaveProperty('deviceId')
+    expect(read.perDevice).toEqual([
+      { deviceId: 'device-1', isActive: true, state: 'active', stateCause: null, picked: false, renderSignal: null, generatedAt: '2026-10-03T07:31:00.000Z' },
+      { deviceId: 'device-2', isActive: false, state: 'upNext', stateCause: null, picked: true, renderSignal: 'skip', generatedAt: null },
+    ])
   })
 })

@@ -7,6 +7,8 @@ import type { ScreensService } from '../../screens/screens.service.js'
 import type { HttpTestApp } from '../../test/httpApp.js'
 import type { DeviceSleepImageService } from '../device-sleep-image.service.js'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DeviceGroupMembershipService } from '../../device-groups/device-group-membership.service.js'
+import { DeviceGroup } from '../../device-groups/device-group.entity.js'
 import { DeviceModel } from '../../device-models/entities/device-model.entity.js'
 import { Palette } from '../../device-models/entities/palette.entity.js'
 import { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
@@ -56,7 +58,7 @@ describe('the Device write and delete against a real database', () => {
       controllers: [DevicesController],
       providers: [
         { provide: DeviceReadsService, useValue: new DeviceReadsService(devices, database.getRepository(Screen), database.getRepository(DeviceScreen), deviceSensors) },
-        { provide: DevicesService, useValue: new DevicesService(devices, asService<DeviceModelsService>(deviceModels), asService<PaletteSelectionService>(paletteSelection), firmware, asService<ScreensService>({ redrawForRenderTarget }), asService<DeviceSleepImageService>({ reconvert: reconvertSleepImage })) },
+        { provide: DevicesService, useValue: new DevicesService(devices, asService<DeviceModelsService>(deviceModels), asService<PaletteSelectionService>(paletteSelection), firmware, asService<ScreensService>({ redrawForRenderTarget }), asService<DeviceSleepImageService>({ reconvert: reconvertSleepImage }), new DeviceGroupMembershipService(devices, database.getRepository(DeviceGroup), database.getRepository(DeviceScreen))) },
       ],
     })
   })
@@ -137,6 +139,27 @@ describe('the Device write and delete against a real database', () => {
 
       expect(response.status).toBe(200)
       expect(await response.json()).toEqual({ ...before, name: 'Pantry' })
+    })
+
+    it('joins a Device Group, answering it on the Detail, and leaves it with null', async () => {
+      const device = await registerDevice()
+      const group = await database.getRepository(DeviceGroup).save({ name: 'Downstairs' })
+
+      const joined = await patch(device.id, { deviceGroupId: group.id })
+      expect(joined.status).toBe(200)
+      expect(await joined.json()).toMatchObject({ deviceGroup: { id: group.id, name: 'Downstairs' } })
+
+      const left = await patch(device.id, { deviceGroupId: null })
+      expect(await left.json()).toMatchObject({ deviceGroup: null })
+    })
+
+    it('refuses a Device Group that does not exist with 404 device-group-not-found', async () => {
+      const device = await registerDevice()
+
+      const response = await patch(device.id, { deviceGroupId: '00000000-0000-4000-8000-000000000000' })
+
+      expect(response.status).toBe(404)
+      expect(await response.json()).toMatchObject({ code: 'device-group-not-found' })
     })
 
     it('answers 404 device-not-found for an unknown or malformed id', async () => {

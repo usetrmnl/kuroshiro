@@ -1,3 +1,4 @@
+import type { DeviceGroupMembershipService } from '../../device-groups/device-group-membership.service.js'
 import type { DeviceModelsService } from '../../device-models/device-models.service.js'
 import type { DeviceModel } from '../../device-models/entities/device-model.entity.js'
 import type { Palette } from '../../device-models/entities/palette.entity.js'
@@ -41,6 +42,7 @@ describe('devicesService', () => {
       asService<FirmwareService>(firmwareService),
       asService<ScreensService>(screensService),
       asService<DeviceSleepImageService>(deviceSleepImage),
+      asService<DeviceGroupMembershipService>({ setGroup: vi.fn() }),
     )
   })
 

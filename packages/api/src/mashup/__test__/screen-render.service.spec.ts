@@ -63,12 +63,12 @@ describe('screenRenderService', () => {
     })
 
     function primeLookups() {
-      deviceScreenRepo.findOne.mockResolvedValue(makeDeviceScreen({ screen: screenWithDevice, device }))
+      deviceScreenRepo.find.mockResolvedValue([makeDeviceScreen({ screen: screenWithDevice, device })])
       screenRepo.findOne.mockResolvedValue(screenWithMashup)
     }
 
     it('does nothing when the Screen no longer exists', async () => {
-      deviceScreenRepo.findOne.mockResolvedValue(null)
+      deviceScreenRepo.find.mockResolvedValue([])
 
       await expect(service.renderAfterSave('screen-1')).resolves.toBeUndefined()
 
@@ -97,7 +97,7 @@ describe('screenRenderService', () => {
     })
 
     it('logs and resolves quietly when the initial lookup throws', async () => {
-      deviceScreenRepo.findOne.mockRejectedValue(new Error('db unreachable'))
+      deviceScreenRepo.find.mockRejectedValue(new Error('db unreachable'))
 
       await expect(service.renderAfterSave('screen-1')).resolves.toBeUndefined()
     })

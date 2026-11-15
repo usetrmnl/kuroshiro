@@ -165,12 +165,12 @@ export class ScreenRenderService {
    */
   async renderAfterSave(screenId: string): Promise<void> {
     try {
-      const record = await this.deviceScreenRepository.findOne({ where: { screen: { id: screenId } }, relations: { device: true, screen: true } })
-      if (!record)
-        return
-      const outcome = await this.renderMashupScreen(record, record.device, false)
-      if (outcome === RENDER_FAILED)
-        this.logger.error(`Mashup screen ${screenId} could not be rendered after save`)
+      const records = await this.deviceScreenRepository.find({ where: { screen: { id: screenId } }, relations: { device: true, screen: true } })
+      for (const record of records) {
+        const outcome = await this.renderMashupScreen(record, record.device, false)
+        if (outcome === RENDER_FAILED)
+          this.logger.error(`Mashup screen ${screenId} could not be rendered after save for device ${record.device.id}`)
+      }
     }
     catch (err) {
       this.logger.error(`Mashup screen ${screenId} was saved, but could not be rendered: ${getErrorMessage(err)}`)

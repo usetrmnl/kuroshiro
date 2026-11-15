@@ -15,6 +15,7 @@ import { Repository } from 'typeorm'
 import { ApiException, ValidationException } from '../errors/api.exception.js'
 import { DeviceScreen } from '../screens/device-screen.entity.js'
 import { closeGapInOrder } from '../screens/screen-order.js'
+import { ownerOfScreen } from '../screens/screen-owner.js'
 import { Screen } from '../screens/screens.entity.js'
 import generateApikey from '../utils/generateApikey.js'
 import { PluginDataSource } from './entities/plugin-data-source.entity.js'
@@ -632,17 +633,18 @@ export class PluginsService implements OnModuleInit {
       const screens = manager.getRepository(Screen)
       const mashups = toPluginPlaces(await screens.find({
         where: { type: 'mashup', mashupConfiguration: { slots: { plugin: { id } } } },
-        relations: { device: true },
+        relations: { device: true, deviceGroup: true },
       }))
       if (mashups.length > 0) {
         const details: PluginInMashupDetails = { mashups }
         throw new ApiException(HttpStatus.CONFLICT, 'plugin-in-mashup', 'The Plugin fills a slot in a Mashup.', { ...details })
       }
 
-      const pluginScreens = await screens.find({ where: { plugin: { id } }, relations: { device: true } })
+      const pluginScreens = await screens.find({ where: { plugin: { id } }, relations: { device: true, deviceGroup: true } })
       await manager.getRepository(Plugin).remove(plugin)
-      for (const deviceId of new Set(pluginScreens.map(screen => screen.device.id)))
-        await closeGapInOrder(manager, deviceId)
+      const owners = new Map(pluginScreens.map(screen => ownerOfScreen(screen)).map(owner => [`${owner.kind}:${owner.id}`, owner]))
+      for (const owner of owners.values())
+        await closeGapInOrder(manager, owner)
     })
 
     this.scheduler.removeScheduledJob(id)

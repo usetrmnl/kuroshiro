@@ -40,6 +40,7 @@ describe('pluginRenderCacheService', () => {
       manager: { getRepository: vi.fn(() => mockMashupSlotRepo) },
     })
 
+    mockScreenRepo.find.mockResolvedValue([])
     mockRecordRepo = createMockRepository<DeviceScreen>()
     mockRecordRepo.find.mockResolvedValue([kitchen, hallway])
 
@@ -84,6 +85,47 @@ describe('pluginRenderCacheService', () => {
 
     expect(mockRenderer.render).toHaveBeenCalledExactlyOnceWith('{{ data }}', { data: 'hello' })
     expect(mockRecordRepo.update).not.toHaveBeenCalled()
+  })
+
+  describe('on a Device Group\'s Screen', () => {
+    const groupScreen = makeScreen({ id: 'screen-group', device: undefined, deviceGroup: { id: 'group-1', name: 'Downstairs' } })
+
+    /** The insert of the missing records the render makes for the members, as the query builder chains it. */
+    function recordInserts() {
+      const insert = { insert: vi.fn(), values: vi.fn(), orIgnore: vi.fn(), execute: vi.fn().mockResolvedValue(undefined) }
+      for (const chained of [insert.insert, insert.values, insert.orIgnore])
+        chained.mockReturnValue(insert)
+      Object.assign(mockRecordRepo, { createQueryBuilder: vi.fn(() => insert) })
+      return insert
+    }
+
+    it('renders a Group Screen with no member once, told no Device, and writes no record', async () => {
+      mockScreenRepo.find.mockResolvedValue([groupScreen])
+      mockMashupSlotRepo.find.mockResolvedValue([])
+      mockRecordRepo.find.mockResolvedValue([])
+      const insert = recordInserts()
+
+      await service.renderAndCache(plugin, { data: 'hello' })
+
+      expect(mockRenderer.render).toHaveBeenCalledExactlyOnceWith('{{ data }}', { data: 'hello' })
+      expect(insert.values).not.toHaveBeenCalled()
+      expect(mockRecordRepo.update).not.toHaveBeenCalled()
+    })
+
+    it('makes a record for each member that has none, and renders once for each, told that member', async () => {
+      const members = [makeDevice({ id: 'device-kitchen', friendlyId: 'KITCHEN' }), makeDevice({ id: 'device-hall', friendlyId: 'HALL' })]
+      mockScreenRepo.find.mockResolvedValue([groupScreen])
+      mockMashupSlotRepo.find.mockResolvedValue(members as never)
+      mockRecordRepo.find.mockResolvedValue(members.map(device => makeDeviceScreen({ id: `record-${device.id}`, device, screen: groupScreen })))
+      const insert = recordInserts()
+      mockRenderer.render.mockImplementation(async (_markup, context) => `<div>${context.trmnl.device.friendly_id}</div>`)
+
+      await service.renderAndCache(plugin, { data: 'hello', trmnl: {} })
+
+      expect(insert.values).toHaveBeenCalledWith(members.map(device => expect.objectContaining({ device: { id: device.id }, screen: { id: 'screen-group' } })))
+      expect(mockRecordRepo.update).toHaveBeenCalledWith('record-device-kitchen', expect.objectContaining({ cachedPluginOutput: '<div>KITCHEN</div>' }))
+      expect(mockRecordRepo.update).toHaveBeenCalledWith('record-device-hall', expect.objectContaining({ cachedPluginOutput: '<div>HALL</div>' }))
+    })
   })
 
   it('still invalidates the Mashups that show a Plugin on no Screen of its own', async () => {

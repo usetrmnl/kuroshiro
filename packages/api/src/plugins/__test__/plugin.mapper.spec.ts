@@ -17,6 +17,7 @@ const NOTHING_AROUND: PluginFacts = {
 const NOTHING_AROUND_IN_DETAIL: PluginDetailFacts = {
   ...NOTHING_AROUND,
   screensByDevice: new Map(),
+  screenCountByGroup: new Map(),
   now: NOW,
   apiUrl: 'https://kuroshiro.example',
 }

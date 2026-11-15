@@ -92,6 +92,7 @@ describe('a Device\'s Screens, GET /api/devices/:id/screens, against a real data
     expect(screens[0]).toEqual({
       id: first.id,
       deviceId: device.id,
+      readOnly: false,
       kind: 'html',
       name: 'First',
       order: 1,

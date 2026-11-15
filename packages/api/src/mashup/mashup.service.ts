@@ -5,11 +5,13 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { isUUID } from 'class-validator'
 import { Repository } from 'typeorm'
+import { DeviceGroup } from '../device-groups/device-group.entity.js'
 import { Device } from '../devices/devices.entity.js'
 import { ApiException, ValidationException } from '../errors/api.exception.js'
 import { Plugin } from '../plugins/entities/plugin.entity.js'
 import { DeviceScreen } from '../screens/device-screen.entity.js'
 import { joinEndOfOrder } from '../screens/screen-order.js'
+import { ownerOfRequest } from '../screens/screen-owner.js'
 import { Screen } from '../screens/screens.entity.js'
 import { MASHUP_LAYOUT_CONFIG } from './constants/layouts.js'
 import { MashupConfiguration } from './entities/mashup-configuration.entity.js'
@@ -36,13 +38,16 @@ export class MashupService {
 
   /** Adds a Mashup at the end of the Device's Order and answers its Screen's id. */
   async create(input: CreateMashupDto): Promise<string> {
-    this.logger.log(`Creating mashup for device ${input.deviceId}`)
-    if (!await this.deviceRepository.existsBy({ id: input.deviceId }))
-      throw new ApiException(HttpStatus.NOT_FOUND, 'device-not-found', 'Device not found', { id: input.deviceId })
+    const owner = ownerOfRequest(input)!
+    this.logger.log(`Creating mashup for ${owner.kind} ${owner.id}`)
+    if (owner.kind === 'device' && !await this.deviceRepository.existsBy({ id: owner.id }))
+      throw new ApiException(HttpStatus.NOT_FOUND, 'device-not-found', 'Device not found', { id: owner.id })
+    if (owner.kind === 'deviceGroup' && !await this.deviceRepository.manager.getRepository(DeviceGroup).existsBy({ id: owner.id }))
+      throw new ApiException(HttpStatus.NOT_FOUND, 'device-group-not-found', 'Device Group not found', { id: owner.id })
     const { layoutConfig, plugins } = await this.resolveLayoutPlugins(input.layout, input.pluginIds)
 
     const screenId = await this.screenRepository.manager.transaction(async (manager) => {
-      const screen = await joinEndOfOrder(manager, input.deviceId, { type: 'mashup', filename: input.name })
+      const screen = await joinEndOfOrder(manager, owner, { type: 'mashup', filename: input.name })
       const configuration = await manager.getRepository(MashupConfiguration).save({ layout: input.layout, screen })
       await this.buildSlots(layoutConfig, plugins, configuration, manager.getRepository(MashupSlot))
       return screen.id

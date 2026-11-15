@@ -2,6 +2,7 @@ import { uuid_ossp } from '@electric-sql/pglite/contrib/uuid_ossp'
 import { DataSource } from 'typeorm'
 import { PGliteDriver } from 'typeorm-pglite'
 import { Alert } from '../alerts/entities/alert.entity.js'
+import { DeviceGroup } from '../device-groups/device-group.entity.js'
 import { DeviceModel } from '../device-models/entities/device-model.entity.js'
 import { Palette } from '../device-models/entities/palette.entity.js'
 import { DeviceSensor } from '../device-sensors/entities/device-sensor.entity.js'
@@ -31,7 +32,7 @@ export async function createTestDatabase(): Promise<DataSource> {
   const dataSource = new DataSource({
     type: 'postgres',
     driver: new PGliteDriver({ extensions: { uuid_ossp } }).driver,
-    entities: [Device, DeviceModel, Palette, DeviceSensor, Screen, DeviceScreen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, MashupConfiguration, MashupSlot, Schedule, Firmware, Alert, InstanceSettings, SyncRun],
+    entities: [Device, DeviceGroup, DeviceModel, Palette, DeviceSensor, Screen, DeviceScreen, LogEntry, Plugin, DevicePlugin, PluginDataSource, PluginTemplate, PluginField, PluginFieldValue, MashupConfiguration, MashupSlot, Schedule, Firmware, Alert, InstanceSettings, SyncRun],
     synchronize: true,
   })
   return dataSource.initialize()

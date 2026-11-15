@@ -26,8 +26,10 @@ import { nextEligibleScreen } from '../schedule/rotation.js'
 import { DeviceScreen } from '../screens/device-screen.entity.js'
 import { RENDER_FAILED, RENDER_HELD, RENDER_SKIPPED } from '../screens/render-outcome.js'
 import { screenImagePath, screenImageUrl } from '../screens/screen-image-paths.js'
+import { ownedBy, shownOwnerOf } from '../screens/screen-owner.js'
 import { gatingRenderSignalOf, rotationScreensOf } from '../screens/screen-states.js'
 import { Screen } from '../screens/screens.entity.js'
+import { shownRecordsOf } from '../screens/shown-records.js'
 import { fileExists } from '../utils/fileExists.js'
 import { fileModifiedAt } from '../utils/fileModifiedAt.js'
 import generateApikey from '../utils/generateApikey.js'
@@ -297,11 +299,7 @@ export class DeviceDisplayService {
       return this.buildSleepResponse(device, now, report)
     }
     this.logger.log(`Device ${device.id} is not mirrored. Cycling screens.`)
-    const records = await this.deviceScreenRepository.find({
-      where: { device: { id: device.id } },
-      relations: { screen: { schedule: true } },
-      order: { screen: { order: 'ASC' } },
-    })
+    const records = await shownRecordsOf({ screens: this.screenRepository, records: this.deviceScreenRepository }, device, { create: true })
 
     const shown = await this.pickAndRenderScreen(records, device, now)
     if (!shown) {
@@ -594,7 +592,9 @@ export class DeviceDisplayService {
   private async resolveFrozenImage(device: Device): Promise<ScreenImage & { filename: string }> {
     const activeRecord = await this.activeRecordOf(device)
     if (!activeRecord) {
-      const screenCount = await this.deviceScreenRepository.count({ where: { device: { id: device.id } } })
+      const screenCount = device.deviceGroup
+        ? await this.screenRepository.countBy(ownedBy(shownOwnerOf(device)))
+        : await this.deviceScreenRepository.count({ where: { device: { id: device.id } } })
       return {
         filename: 'noScreen.png',
         imgUrl: await this.fallbackImageUrl({ kind: 'noScreen' }, device),

@@ -12,6 +12,7 @@ interface PluginFolder {
 export function buildArchive(options: {
   manifest?: Record<string, unknown> | null
   plugins?: unknown[]
+  deviceGroups?: unknown[]
   devices?: unknown[]
   screens?: unknown[]
   assignments?: unknown[]
@@ -20,6 +21,7 @@ export function buildArchive(options: {
   settings?: Record<string, unknown> | null
   pluginFolders?: Record<string, PluginFolder>
   screenImages?: Record<string, string>
+  screenOriginals?: Record<string, string>
   deviceSleepImages?: Record<string, { original?: string, converted?: string }>
 } = {}): Buffer {
   const zip = new AdmZip()
@@ -35,6 +37,9 @@ export function buildArchive(options: {
   }
 
   zip.addFile('plugins.json', Buffer.from(JSON.stringify(options.plugins ?? [])))
+  if (options.deviceGroups !== undefined) {
+    zip.addFile('device-groups.json', Buffer.from(JSON.stringify(options.deviceGroups)))
+  }
   zip.addFile('devices.json', Buffer.from(JSON.stringify(options.devices ?? [])))
   zip.addFile('screens.json', Buffer.from(JSON.stringify(options.screens ?? [])))
   zip.addFile('assignments.json', Buffer.from(JSON.stringify(options.assignments ?? [])))
@@ -56,6 +61,10 @@ export function buildArchive(options: {
 
   for (const [screenId, content] of Object.entries(options.screenImages ?? {})) {
     zip.addFile(`screens/${screenId}/${screenId}.png`, Buffer.from(content))
+  }
+
+  for (const [screenId, content] of Object.entries(options.screenOriginals ?? {})) {
+    zip.addFile(`screens/${screenId}.original`, Buffer.from(content))
   }
 
   for (const [deviceId, images] of Object.entries(options.deviceSleepImages ?? {})) {

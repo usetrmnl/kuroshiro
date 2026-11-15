@@ -15,7 +15,7 @@ export class DeviceScreensController {
 
   @Put('order')
   async reorder(@Param('deviceId') deviceId: string, @Body() body: ReorderScreensDto): Promise<ScreenRead[]> {
-    await this.screensService.reorder(deviceId, body.screenIds)
+    await this.screensService.reorder({ kind: 'device', id: deviceId }, body.screenIds)
     return this.screenReads.forDevice(deviceId)
   }
 }
