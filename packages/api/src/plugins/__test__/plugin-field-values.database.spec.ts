@@ -7,6 +7,7 @@ import type { MashupSlot } from '../../mashup/entities/mashup-slot.entity.js'
 import type { PreviewDataDto } from '../dto/preview-data.dto.js'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Alert } from '../../alerts/entities/alert.entity.js'
+import { createNoSensorsService } from '../../device-sensors/__test__/mockDeviceSensorsService.js'
 import { Device } from '../../devices/devices.entity.js'
 import { InstanceTimeZone } from '../../instance/instance-time-zone.js'
 import { MashupRendererService } from '../../mashup/services/mashup-renderer.service.js'
@@ -68,7 +69,7 @@ describe('field values against a real database', () => {
     const config = asService<ConfigService>({ get: () => false })
     const resolver = new PluginDataResolverService(new PluginDataFetcherService(renderer, config, new InstanceTimeZone()), new PluginTransformService())
     const templateContext = new PluginTemplateContextService(fieldValues, resolver, new InstanceTimeZone(), new PluginDataSourceStateService(database.getRepository(PluginDataSource)))
-    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())))
+    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
     const refresh = new PluginRefreshService(renderCache, templateContext, new DataSourceFetchOutcomeService(database.getRepository(PluginDataSource)), new PluginDataSourceStateService(database.getRepository(PluginDataSource)), database.getRepository(Plugin))
 
     scheduler = new PluginSchedulerService(refresh)

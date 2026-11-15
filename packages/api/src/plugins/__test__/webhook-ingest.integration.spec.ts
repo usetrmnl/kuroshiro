@@ -8,6 +8,8 @@ import { Test } from '@nestjs/testing'
 import { getRepositoryToken } from '@nestjs/typeorm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DeviceModelsService } from '../../device-models/device-models.service.js'
+import { createNoSensorsService } from '../../device-sensors/__test__/mockDeviceSensorsService.js'
+import { DeviceSensorsService } from '../../device-sensors/device-sensors.service.js'
 import { InstanceTimeZone } from '../../instance/instance-time-zone.js'
 import { MashupSlot as MashupSlotEntity } from '../../mashup/entities/mashup-slot.entity.js'
 import { Screen as ScreenEntity } from '../../screens/screens.entity.js'
@@ -116,6 +118,7 @@ describe('webhook ingest integration', () => {
         { provide: getRepositoryToken(PluginField), useValue: {} },
         { provide: PluginFieldValuesService, useValue: createMockPluginFieldValuesService() },
         { provide: PluginAssignmentsService, useValue: {} },
+        { provide: DeviceSensorsService, useValue: createNoSensorsService() },
         { provide: DeviceModelsService, useValue: primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService()) },
         { provide: getRepositoryToken(MashupSlotEntity), useValue: mashupSlotRepo },
         { provide: PluginDataResolverService, useValue: {} },

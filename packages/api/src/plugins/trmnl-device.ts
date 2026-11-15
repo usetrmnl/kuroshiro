@@ -1,8 +1,10 @@
 import type { DeviceModelsService } from '../device-models/device-models.service.js'
 import type { DeviceModel } from '../device-models/entities/device-model.entity.js'
+import type { DeviceSensor } from '../device-sensors/entities/device-sensor.entity.js'
 import type { Device } from '../devices/devices.entity.js'
 import type { PluginRenderContext } from './services/plugin-template-context.service.js'
 import { batteryPercentFromVoltage } from 'kuroshiro-shared'
+import { sensorsByKind } from './services/plugin-template-context.service.js'
 
 /**
  * `trmnl.device` as trmnlp's `device_namespace` spells it, for the Device a
@@ -51,12 +53,14 @@ export function trmnlDeviceOf(device: Device, model: DeviceModel): TrmnlDevice {
  * A render's context with `trmnl.device` told for the Device it is rendered
  * for, at the Device Model it is rendered at. The data was fetched without it,
  * so a Data Source never reads it. A Webhook Payload that is an array is the
- * whole context and has no `trmnl` to hold it.
+ * whole context and has no `trmnl` to hold it. Given the Device's `sensors`,
+ * it lays those on the context as well, replacing the empty ones of a render
+ * that was fetched for no Device.
  */
-export async function withTrmnlDevice(context: PluginRenderContext['context'], device: Device, deviceModels: Pick<DeviceModelsService, 'renderTargetFor'>): Promise<PluginRenderContext['context']> {
+export async function withTrmnlDevice(context: PluginRenderContext['context'], device: Device, deviceModels: Pick<DeviceModelsService, 'renderTargetFor'>, sensors?: DeviceSensor[]): Promise<PluginRenderContext['context']> {
   if (Array.isArray(context))
     return context
   const { model } = await deviceModels.renderTargetFor(device)
   const trmnl = typeof context.trmnl === 'object' && context.trmnl !== null ? context.trmnl : {}
-  return { ...context, trmnl: { ...trmnl, device: trmnlDeviceOf(device, model) } }
+  return { ...context, ...(sensors && { sensors: sensorsByKind(sensors) }), trmnl: { ...trmnl, device: trmnlDeviceOf(device, model) } }
 }

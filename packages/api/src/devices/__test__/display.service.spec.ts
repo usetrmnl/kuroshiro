@@ -455,6 +455,21 @@ describe('deviceDisplayService', () => {
       expect(html).toContain('<div class="view view--full"><b>1</b></div>')
     })
 
+    it('lays the Device\'s current Sensors on a Plugin Screen rendered on demand', async () => {
+      const device = makeDevice({ ...baseDevice, deviceModel: OG_PLUS })
+      const plugin = makePlugin({ id: 'p1', name: 'Clock', dataSources: [], templates: [makePluginTemplate({ layout: 'full', liquidMarkup: '{{ sensors.temperature.value }}' })] })
+      primeRotation({ id: 'screen2', type: 'plugin', order: 2, plugin, filename: 'x' }, device)
+      deviceSensors.findForDevice.mockResolvedValue([makeDeviceSensor({ kind: 'temperature', value: 21.5, unit: 'C' })])
+      const render = vi.fn().mockResolvedValue('<b>21.5</b>')
+      injectPrivate(service, 'pluginRenderer', { render })
+      injectPrivate(service, 'pluginTemplateContext', createPluginTemplateContextService({}))
+
+      await service.getCurrentImage(headers)
+
+      expect(deviceSensors.findForDevice).toHaveBeenCalledWith(device.id)
+      expect(render).toHaveBeenCalledWith('{{ sensors.temperature.value }}', expect.objectContaining({ sensors: { temperature: { value: 21.5, unit: 'C' } } }))
+    })
+
     it('renders a Poll-kind Plugin without Data Sources on demand, with trmnl and its Field Values only', async () => {
       const device = makeDevice({ ...baseDevice, deviceModel: OG_PLUS })
       const plugin = makePlugin({ id: 'p1', name: 'Clock', dataSources: [], templates: [makePluginTemplate({ layout: 'full', liquidMarkup: '{{ city }}' })] })
@@ -468,19 +483,6 @@ describe('deviceDisplayService', () => {
       expect(render).toHaveBeenCalledWith('{{ city }}', { city: 'Berlin', sensors: {}, trmnl: expect.objectContaining({ plugin_settings: expect.objectContaining({ instance_name: 'Clock' }) }) })
       const html: string = puppeteerPage.setContent.mock.calls[0][0]
       expect(html).toContain('<div class="view view--full"><b>Berlin</b></div>')
-    })
-
-    it('renders a Poll-kind Plugin on demand with no Device Sensors, even though the polling Device has readings', async () => {
-      const device = makeDevice({ ...baseDevice, deviceModel: OG_PLUS })
-      const plugin = makePlugin({ id: 'p1', name: 'Clock', dataSources: [], templates: [makePluginTemplate({ layout: 'full', liquidMarkup: '{{ sensors }}' })] })
-      primeRotation({ id: 'screen2', type: 'plugin', order: 2, plugin, filename: 'x' }, device)
-      deviceSensors.findForDevice.mockResolvedValue([makeDeviceSensor({ kind: 'temperature', value: 21.5, unit: 'C' })])
-      const render = vi.fn().mockResolvedValue('<b></b>')
-      injectPrivate(service, 'pluginRenderer', { render })
-
-      await service.getCurrentImage(headers)
-
-      expect(render).toHaveBeenCalledWith('{{ sensors }}', expect.objectContaining({ sensors: {} }))
     })
 
     it('fetches and renders with the Plugin\'s Field Values, in both address forms, when rendering on demand', async () => {

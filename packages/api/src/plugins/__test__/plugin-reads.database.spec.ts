@@ -6,6 +6,7 @@ import type { HttpTestApp } from '../../test/httpApp.js'
 import { getRepositoryToken } from '@nestjs/typeorm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { Alert } from '../../alerts/entities/alert.entity.js'
+import { createNoSensorsService } from '../../device-sensors/__test__/mockDeviceSensorsService.js'
 import { Device } from '../../devices/devices.entity.js'
 import { InstanceTimeZone } from '../../instance/instance-time-zone.js'
 import { MashupConfiguration } from '../../mashup/entities/mashup-configuration.entity.js'
@@ -77,7 +78,7 @@ describe('the Plugin reads, GET /api/plugins and GET /api/plugins/:id, against a
     const config = asService<ConfigService>({ get: () => false, getOrThrow: () => API_URL })
     const resolver = new PluginDataResolverService(new PluginDataFetcherService(renderer, config, new InstanceTimeZone()), new PluginTransformService())
     const templateContext = new PluginTemplateContextService(fieldValues, resolver, new InstanceTimeZone(), new PluginDataSourceStateService(database.getRepository(PluginDataSource)))
-    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())))
+    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
     refresh = new PluginRefreshService(renderCache, templateContext, new DataSourceFetchOutcomeService(database.getRepository(PluginDataSource)), new PluginDataSourceStateService(database.getRepository(PluginDataSource)), database.getRepository(Plugin))
     scheduler = new PluginSchedulerService(refresh)
     assignments = new PluginAssignmentsService(database.getRepository(Plugin), database.getRepository(Device), database.getRepository(DevicePlugin))

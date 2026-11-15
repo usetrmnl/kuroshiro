@@ -5,6 +5,7 @@ import type { DeviceModelsService } from '../../device-models/device-models.serv
 import type { HttpTestApp } from '../../test/httpApp.js'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Alert } from '../../alerts/entities/alert.entity.js'
+import { createNoSensorsService } from '../../device-sensors/__test__/mockDeviceSensorsService.js'
 import { Device } from '../../devices/devices.entity.js'
 import { InstanceTimeZone } from '../../instance/instance-time-zone.js'
 import { MashupConfiguration } from '../../mashup/entities/mashup-configuration.entity.js'
@@ -71,7 +72,7 @@ describe('saving a Plugin, PATCH /api/plugins/:id, against a real database', () 
     const config = asService<ConfigService>({ get: () => false, getOrThrow: () => 'https://kuroshiro.example' })
     const resolver = new PluginDataResolverService(new PluginDataFetcherService(renderer, config, new InstanceTimeZone()), new PluginTransformService())
     const templateContext = new PluginTemplateContextService(fieldValues, resolver, new InstanceTimeZone(), new PluginDataSourceStateService(database.getRepository(PluginDataSource)))
-    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())))
+    const renderCache = new PluginRenderCacheService(renderer, database.getRepository(Screen), asService<DeviceModelsService>(primeMockDeviceModelsServiceWithAssignedModels(createMockDeviceModelsService())), createNoSensorsService())
     const refresh = new PluginRefreshService(renderCache, templateContext, new DataSourceFetchOutcomeService(database.getRepository(PluginDataSource)), new PluginDataSourceStateService(database.getRepository(PluginDataSource)), database.getRepository(Plugin))
     scheduler = new PluginSchedulerService(refresh)
     assignments = new PluginAssignmentsService(database.getRepository(Plugin), database.getRepository(Device), database.getRepository(DevicePlugin))
