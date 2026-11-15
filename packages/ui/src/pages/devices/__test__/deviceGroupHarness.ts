@@ -18,8 +18,8 @@ export const GROUP_ID = 'downstairs'
 
 const imagePath = (deviceId: string, screenId: string) => `/screens/devices/${deviceId}/${screenId}.png?v=1`
 
-const KITCHEN = buildDeviceGroupMember({ id: 'kitchen', name: 'Kitchen', friendlyId: 'KITCHN' })
-const HALLWAY = buildDeviceGroupMember({
+export const KITCHEN = buildDeviceGroupMember({ id: 'kitchen', name: 'Kitchen', friendlyId: 'KITCHN' })
+export const HALLWAY = buildDeviceGroupMember({
   id: 'hallway',
   name: 'Hallway',
   friendlyId: 'HALLWY',
@@ -116,7 +116,7 @@ export function fakeDownstairs({ group = DOWNSTAIRS, screens = GROUP_SCREENS, de
     faked.screens = faked.screens.map(screen => screen.id === id ? change(screen) : screen)
     return HttpResponse.json(faked.screens.find(screen => screen.id === id))
   }
-  const memberOf = (device: DeviceSummary) => buildDeviceGroupMember({ id: device.id, name: device.name, friendlyId: device.friendlyId, deviceModel: device.deviceModel, palette: null })
+  const memberOf = (device: DeviceSummary) => buildDeviceGroupMember({ id: device.id, name: device.name, friendlyId: device.friendlyId, deviceModel: device.deviceModel, palette: null, isMirrored: device.isMirrored, isProxied: device.isProxied })
 
   freezeTime(NOW)
   fakeScreenImages()

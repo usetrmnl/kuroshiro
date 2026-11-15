@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { UpdateMashupInput } from 'kuroshiro-shared'
-import type { ScreenBody } from './screenTarget'
+import type { ScreenBody, UpdateMashupInput } from 'kuroshiro-shared'
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { listPlugins } from '@/api/plugins'
 import { updateMashup } from '@/api/screens'

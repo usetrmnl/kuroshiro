@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { RenderTarget, ScreenBody } from './screenTarget'
+import type { ScreenBody } from 'kuroshiro-shared'
+import type { RenderTarget } from './screenTarget'
 import { useId } from 'vue'
 import { SCREEN_KIND_LABELS } from '@/components/screenRows'
 import ExternalScreenSource from './ExternalScreenSource.vue'

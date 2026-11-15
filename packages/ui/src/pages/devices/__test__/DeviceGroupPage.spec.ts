@@ -6,7 +6,7 @@ import { api, apiErrorResponse, apiUrl } from '@/testing/api/server'
 import { mountApp } from '@/testing/app'
 import { buildDeviceGroup } from '@/testing/fixtures/device-groups'
 import { expectNoHorizontalOverflow } from '@/testing/overflow'
-import { DEVICES, DOWNSTAIRS, fakeDownstairs, GROUP_ID, GROUP_SCREENS, mountGroup, NEW_SCREEN_ID, openedRow, rowChips, words } from './deviceGroupHarness'
+import { DEVICES, DOWNSTAIRS, fakeDownstairs, GROUP_ID, GROUP_SCREENS, HALLWAY, KITCHEN, mountGroup, NEW_SCREEN_ID, openedRow, rowChips, words } from './deviceGroupHarness'
 
 const main = (screen: Awaited<ReturnType<typeof mountGroup>>) => screen.getByRole('main')
 
@@ -43,6 +43,16 @@ describe('the Device Group page', () => {
     await expect.poll(() => faked.writes).toEqual([{ method: 'PUT', path: 'devices/kitchen/picked-screen', body: { screenId: 'notes' } }])
     await expect.poll(() => words(each.element())).toContain('Kitchen · Up next · picked by hand')
     await expect.element(row.getByRole('button', { name: 'Back to Order' })).toBeVisible()
+  })
+
+  it('offers no "Show next" for a mirrored member, whose Rotation is paused', async () => {
+    fakeDownstairs({ group: buildDeviceGroup({ id: GROUP_ID, name: 'Downstairs', members: [{ ...KITCHEN, isMirrored: true }, HALLWAY] }) })
+    const screen = await mountGroup('?screen=notes')
+
+    const row = await openedRow(screen, 'Notes')
+    const each = row.getByRole('list', { name: 'On each Device' })
+    await expect.element(each.getByRole('listitem').nth(1).getByRole('button', { name: 'Show next' })).toBeVisible()
+    expect(each.getByRole('listitem').nth(0).getByRole('button', { name: 'Show next' }).query()).toBeNull()
   })
 
   it('offers no "Show next" where a Device shows the Screen or turns to it next, and says so when no Device is in the Group', async () => {

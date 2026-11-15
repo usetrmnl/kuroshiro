@@ -41,12 +41,13 @@ export async function shownRecordsOf(
   }
   const byScreen = new Map(records.map(record => [record.screen.id, record]))
   return screens.map((screen) => {
-    const record = byScreen.get(screen.id) ?? placeholderOf(device, screen)
+    const record = byScreen.get(screen.id) ?? placeholderRecordOf(device, screen)
     record.screen = screen
     return record
   })
 }
 
-function placeholderOf(device: Pick<Device, 'id'>, screen: Screen): DeviceScreen {
+/** A Device's record of a Screen it has not met yet, as a read answers it: not stored, not Active and never rendered. */
+export function placeholderRecordOf(device: Pick<Device, 'id'>, screen: Screen): DeviceScreen {
   return Object.assign(new DeviceScreen(), { id: '', device: { id: device.id } as Device, screen, isActive: false, generatedAt: NEVER, cachedPluginOutput: null, renderSignal: null })
 }

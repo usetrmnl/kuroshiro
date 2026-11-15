@@ -9,7 +9,7 @@ import { useDeviceFrame } from './deviceFrame'
 /**
  * A write to the Device of the frame, with the state of save as changed for the row that made it.
  * `send` writes only the fields it is given; once the server has them the Device is read again, so every
- * row follows, and the Devices too after a rename, for the bar.
+ * row follows, and the Devices too after a rename or a change of Device Group, for the bar and the Devices list.
  */
 export function useDeviceWrite() {
   const { device } = useDeviceFrame()
@@ -20,7 +20,7 @@ export function useDeviceWrite() {
     if (!device.data)
       throw new Error('The Device has not loaded.')
     await updateDevice(device.data.id, sent)
-    await Promise.all([device.reload(), 'name' in sent ? devices.reload() : undefined])
+    await Promise.all([device.reload(), 'name' in sent || 'deviceGroupId' in sent ? devices.reload() : undefined])
   }, input)
 
   return reactive({

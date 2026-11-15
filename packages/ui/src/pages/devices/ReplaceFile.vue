@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { RenderTarget, ScreenBody } from './screenTarget'
+import type { ScreenBody } from 'kuroshiro-shared'
+import type { RenderTarget } from './screenTarget'
 import { nextTick, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from 'vue'
 import { imageUrl } from '@/api/client'
 import { previewScreenImage, replaceScreenImage } from '@/api/screens'

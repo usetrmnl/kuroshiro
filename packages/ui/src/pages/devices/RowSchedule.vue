@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ScreenBody } from './screenTarget'
+import type { ScreenBody } from 'kuroshiro-shared'
 import ScheduleSummary from './ScheduleSummary.vue'
 import ScheduleSwitch from './ScheduleSwitch.vue'
 

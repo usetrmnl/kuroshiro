@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { RenderTarget, ScreenBody } from './screenTarget'
+import type { ScreenBody } from 'kuroshiro-shared'
+import type { RenderTarget } from './screenTarget'
 import { computed, nextTick, ref, useId, useTemplateRef } from 'vue'
 import { NOT_IN_DEMO } from '@/api/refusalWording'
 import Button from '@/components/Button.vue'

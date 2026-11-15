@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DeviceGroup, GroupScreen } from 'kuroshiro-shared'
-import { computed, nextTick, useTemplateRef } from 'vue'
+import { computed, nextTick, ref, useTemplateRef } from 'vue'
 import { RouterLink } from 'vue-router'
 import { imageUrl } from '@/api/client'
 import { reorderGroupScreens } from '@/api/device-groups'
@@ -41,14 +41,33 @@ const list = useScreensInOrder(() => props.screens.map(screen => ({ ...screen, r
   await props.reload()
 })
 
-const rows = computed(() => list.ordered.map(screen => ({
-  ...screen,
-  name: screenName(screen.name),
-  savedName: screen.name,
-  rowState: rowStateOf(screen),
-  chips: memberChips(screen, props.group.members),
-  thumbnail: thumbnailOf(screen),
-})))
+const memberModel = (deviceId: string | undefined) => props.group.members.find(member => member.id === deviceId)?.deviceModel
+
+const rows = computed(() => list.ordered.map((screen) => {
+  const thumbnail = thumbnailOf(screen)
+  return {
+    ...screen,
+    name: screenName(screen.name),
+    savedName: screen.name,
+    rowState: rowStateOf(screen),
+    chips: memberChips(screen, props.group.members),
+    thumbnail,
+    thumbnailModel: memberModel(thumbnail?.deviceId),
+    renderingFor: renderingFor(screen),
+  }
+}))
+
+/** For each Screen changed since it was rendered, when each member's rendering was made: a member shows the rendering plate until its own render moves. */
+const outdatedRenders = ref<Record<string, Record<string, string | null>>>({})
+
+function awaitRendering(screen: GroupScreen) {
+  outdatedRenders.value = { ...outdatedRenders.value, [screen.id]: Object.fromEntries(screen.perDevice.map(member => [member.deviceId, member.renderedAt])) }
+}
+
+function renderingFor(screen: GroupScreen): Record<string, boolean> {
+  const outdated = outdatedRenders.value[screen.id]
+  return Object.fromEntries(screen.perDevice.map(member => [member.deviceId, outdated !== undefined && member.deviceId in outdated && outdated[member.deviceId] === member.renderedAt]))
+}
 
 const heading = useTemplateRef('heading')
 
@@ -59,8 +78,6 @@ async function showWithoutRemoved() {
   await nextTick()
   heading.value?.focus()
 }
-
-const plateSize = computed(() => props.group.members[0]?.deviceModel)
 </script>
 
 <template>
@@ -101,8 +118,8 @@ const plateSize = computed(() => props.group.members[0]?.deviceModel)
               :name="`${item.name}, as last rendered`"
               :src="item.thumbnail?.imagePath && imageUrl(item.thumbnail.imagePath)"
               size="row"
-              :width="plateSize?.width"
-              :height="plateSize?.height"
+              :width="item.thumbnailModel?.width"
+              :height="item.thumbnailModel?.height"
               lazy
             />
           </template>
@@ -119,12 +136,12 @@ const plateSize = computed(() => props.group.members[0]?.deviceModel)
               </template>
             </span>
           </template>
-          <GroupOpenedScreen :screen="item" :screens="rows" :group="group" :jumps="list.isMany" :rendering="list.isOutdated(item)" :reload="reload" @move="by => list.move(item.id, by)">
+          <GroupOpenedScreen :screen="item" :screens="rows" :group="group" :jumps="list.isMany" :rendering-for="item.renderingFor" :reload="reload" @move="by => list.move(item.id, by)">
             <template #schedule>
               <ScheduleEditor :screen="item" :reload="reload" />
             </template>
             <template #source>
-              <ScreenSource :screen="item" :image-path="item.thumbnail?.imagePath ?? null" :rendered-at="item.renderedAt" :renders-as="target.rendersAs" :reload="reload" @rerendering="list.awaitRendering(item)" />
+              <ScreenSource :screen="item" :image-path="item.thumbnail?.imagePath ?? null" :rendered-at="item.renderedAt" :renders-as="target.rendersAs" :reload="reload" @rerendering="awaitRendering(item)" />
             </template>
             <template v-if="item.kind !== 'plugin'" #actionsBefore>
               <Button variant="quiet" :disabled="list.renaming === item.id" @click="list.setRenaming(item.id, true)">

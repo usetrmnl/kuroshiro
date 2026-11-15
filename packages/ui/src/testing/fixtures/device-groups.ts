@@ -15,6 +15,8 @@ export const buildDeviceGroupMember = defineBuilder<DeviceGroupMember>(() => ({
   friendlyId: '4F2A1C',
   deviceModel: { name: 'og_plus', label: 'TRMNL OG (2-bit)', width: 800, height: 480, deprecated: false },
   palette: { id: '5c9e2f7a-3b1d-4e8f-a6c4-0d2b7e9f1a3c', name: 'Greyscale, 4 levels', kind: 'official' },
+  isMirrored: false,
+  isProxied: false,
 }))
 
 export const buildDeviceGroup = defineBuilder<DeviceGroup>(() => ({

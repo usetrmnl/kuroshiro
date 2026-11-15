@@ -1,4 +1,4 @@
-import type { ScreenBody } from './screenTarget'
+import type { ScreenBody } from 'kuroshiro-shared'
 import { ref, watch } from 'vue'
 import { updateScreen } from '@/api/screens'
 import { useSaveAsChanged } from '@/components/useSaveAsChanged'

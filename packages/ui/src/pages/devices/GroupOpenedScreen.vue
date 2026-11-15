@@ -16,8 +16,8 @@ const props = defineProps<{
   group: DeviceGroup
   /** Whether the Screen can jump to the top and to the end of the Order, as on a Group with many Screens. */
   jumps?: boolean
-  /** What the Screen is made from has changed since its image was rendered, so the previews show the rendering plate. */
-  rendering?: boolean
+  /** The members whose rendering of the Screen is of what it was made from before a change, shown as the rendering plate until they render it again. */
+  renderingFor?: Record<string, boolean>
   /** Reads the Screens again, after a member's pick changed. */
   reload: () => Promise<void>
 }>()
@@ -40,7 +40,7 @@ defineSlots<{
 
 const name = computed(() => screenName(props.screen.name))
 
-/** Each member with how the Screen stands for it and its own rendering of it. A member is not mirrored or Proxied as far as the Group knows; "Show next" is offered where the Screen waits its turn. */
+/** Each member with how the Screen stands for it and its own rendering of it; "Show next" is offered where the Screen waits its turn on a member whose Rotation is not paused. */
 const members = computed(() => props.group.members.map((member) => {
   const state = props.screen.perDevice.find(candidate => candidate.deviceId === member.id)
   return {
@@ -50,7 +50,7 @@ const members = computed(() => props.group.members.map((member) => {
     imagePath: state?.imagePath ?? null,
     renderedAt: state?.renderedAt ?? null,
     words: memberStateWords(state ?? { state: null, picked: false, renderSignal: null }),
-    pickable: { id: member.id, isMirrored: false, isProxied: false },
+    pickable: { id: member.id, isMirrored: member.isMirrored, isProxied: member.isProxied },
   }
 }))
 
@@ -70,7 +70,7 @@ const place = computed(() => props.screens.findIndex(screen => screen.id === pro
             :src="member.imagePath && imageUrl(member.imagePath)"
             :width="member.deviceModel?.width"
             :height="member.deviceModel?.height"
-            :rendering="rendering"
+            :rendering="renderingFor?.[member.id]"
           />
           <figcaption class="caption">
             <template v-if="member.renderedAt">

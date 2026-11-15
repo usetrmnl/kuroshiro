@@ -10,7 +10,7 @@ import ScreenRows from '@/components/ScreenRows.vue'
 import TuckedSection from '@/components/TuckedSection.vue'
 import LoadBody from '@/patterns/LoadBody.vue'
 import { useLoad } from '@/patterns/useLoad'
-import { screensCounted } from './deviceGroups'
+import { screensCounted } from './deviceSettings'
 import { screenName } from './screenNaming'
 
 const props = defineProps<{

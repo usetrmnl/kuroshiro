@@ -8,14 +8,12 @@ import GroupMembers from './GroupMembers.vue'
 import GroupName from './GroupName.vue'
 import GroupScreensInOrder from './GroupScreensInOrder.vue'
 import GroupScreensLoading from './GroupScreensLoading.vue'
+import { useScreenTarget } from './screenTarget'
 
 const { group, screens, name } = useDeviceGroupFrame()
+const { reload } = useScreenTarget()
 
 const page = joinLoads<{ group: DeviceGroup, screens: GroupScreen[] }>({ group, screens })
-
-async function reloadAll() {
-  await Promise.all([group.reload(), screens.reload()])
-}
 </script>
 
 <template>
@@ -29,7 +27,7 @@ async function reloadAll() {
           One set of Screens, shown by every Device in the Group. Each Device renders them for its own Device Model and Palette and walks the Order at its own pace.
         </p>
         <GroupName class="first" :group="data.group" />
-        <GroupMembers :group="data.group" :reload="reloadAll" />
+        <GroupMembers :group="data.group" :reload="reload" />
         <GroupScreensInOrder :group="data.group" :screens="data.screens" :reload="screens.reload" />
         <GroupDeletion :group="data.group" :screen-count="data.screens.length" />
       </template>

@@ -150,6 +150,9 @@ export interface ScreenRead {
   dither: boolean
 }
 
+/** A Screen without any one Device's state: what a Device's read and a Device Group's both carry. */
+export type ScreenBody = Omit<ScreenRead, 'deviceId' | 'readOnly' | 'state' | 'stateCause' | 'picked' | 'renderSignal' | 'imagePath' | 'renderedAt'>
+
 /** The kinds `POST /api/screens` creates; a Mashup and a Plugin Assignment have their own endpoints. */
 export const CREATABLE_SCREEN_KINDS = ['external', 'file', 'html'] as const satisfies readonly ScreenKind[]
 

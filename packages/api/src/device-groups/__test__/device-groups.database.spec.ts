@@ -167,7 +167,7 @@ describe('device Groups, against a real database', () => {
       await join(kitchen, group.id)
 
       const detail: DeviceGroupRead = await (await http.request(`/api/device-groups/${group.id}`)).json()
-      expect(detail.members).toEqual([{ id: kitchen.id, name: 'Kitchen', friendlyId: 'KITCHN', deviceModel: null, palette: null }])
+      expect(detail.members).toEqual([{ id: kitchen.id, name: 'Kitchen', friendlyId: 'KITCHN', deviceModel: null, palette: null, isMirrored: false, isProxied: false }])
 
       const renamed = await http.request(`/api/device-groups/${group.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Upstairs' }) })
       expect(await renamed.json()).toMatchObject({ name: 'Upstairs' })
@@ -286,11 +286,33 @@ describe('device Groups, against a real database', () => {
       await poll(kitchen)
       await writeFile(screenImagePath(kitchen.id, only), 'image')
 
+      await writeFile(screenImagePath(kitchen.id, UNKNOWN_ID), 'another Screen\'s image')
+      await writeFile(originalImagePath(kitchen.id, only), 'not an image')
+
       const [screen] = await groupScreens(group.id)
 
       const byDevice = Object.fromEntries(screen.perDevice.map(state => [state.deviceId, state]))
       expect(byDevice[kitchen.id]).toMatchObject({ imagePath: expect.stringMatching(new RegExp(`^/screens/devices/${kitchen.id}/${only}\\.png\\?v=\\d+$`)), renderedAt: expect.any(String) })
       expect(byDevice[hall.id]).toMatchObject({ imagePath: null, renderedAt: null })
+    })
+
+    it('reads every member\'s state with the Group\'s Screens loaded once, a member\'s stored records and placeholders alike', async () => {
+      const group = await createGroup()
+      const [one, two] = [await addGroupScreen(group.id, 'One'), await addGroupScreen(group.id, 'Two')]
+      await join(kitchen, group.id)
+      await join(hall, group.id)
+      await poll(kitchen)
+      const screenFinds = vi.spyOn(database.getRepository(Screen), 'find')
+
+      const screens = await screenReads.forGroup(group.id)
+
+      expect(screenFinds).toHaveBeenCalledTimes(1)
+      expect(screens.map(screen => screen.perDevice.map(state => [state.deviceId, state.isActive, state.generatedAt !== null]))).toEqual([
+        [[hall.id, false, false], [kitchen.id, true, true]],
+        [[hall.id, false, false], [kitchen.id, false, true]],
+      ])
+      expect(screens.map(screen => screen.id)).toEqual([one, two])
+      screenFinds.mockRestore()
     })
 
     it('puts a member that has not met a Screen yet in the list without a record', async () => {

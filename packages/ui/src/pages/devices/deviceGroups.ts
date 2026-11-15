@@ -1,14 +1,13 @@
 import type { DeviceGroup, DeviceGroupMember, DeviceGroupSummary, DeviceSummary, GroupScreen, GroupScreenDeviceState, ScreenState } from 'kuroshiro-shared'
 import type { SelectOption } from '@/components/selectOption'
 import { SCREEN_STATE_LABELS } from '@/components/screenRows'
+import { screensCounted } from './deviceSettings'
 import { possessive } from './screenNaming'
 
 /** What is wrong with a Group's name as entered, or nothing. */
 export const groupNameProblem = (name: string) => name.trim() === '' ? 'A Device Group needs a name.' : undefined
 
 const devicesCounted = (count: number) => `${count} ${count === 1 ? 'Device' : 'Devices'}`
-
-export const screensCounted = (count: number) => `${count} ${count === 1 ? 'Screen' : 'Screens'}`
 
 /** The line under a Group's name in the Devices list: "2 Devices · 5 Screens". */
 export const groupFacts = ({ memberCount, screenCount }: DeviceGroupSummary) => `${devicesCounted(memberCount)} · ${screensCounted(screenCount)}`

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ScreenBody } from './screenTarget'
+import type { ScreenBody } from 'kuroshiro-shared'
 import { nextTick, ref, useId, useTemplateRef } from 'vue'
 import { createSchedule } from '@/api/screens'
 import Button from '@/components/Button.vue'

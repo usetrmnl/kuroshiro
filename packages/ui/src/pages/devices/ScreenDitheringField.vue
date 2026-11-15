@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ScreenBody } from './screenTarget'
+import type { ScreenBody } from 'kuroshiro-shared'
 import SaveState from '@/components/SaveState.vue'
 import DitheringField from '@/patterns/DitheringField.vue'
 import { useScreenDither } from './useScreenDither'

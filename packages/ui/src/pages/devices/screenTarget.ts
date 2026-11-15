@@ -1,4 +1,4 @@
-import type { DeviceDetail, DeviceGroup, ScreenOwner, ScreenRead } from 'kuroshiro-shared'
+import type { DeviceDetail, DeviceGroup, ScreenBody, ScreenOwner } from 'kuroshiro-shared'
 import type { ComputedRef, InjectionKey } from 'vue'
 import { inject, provide } from 'vue'
 
@@ -25,9 +25,6 @@ export function groupTarget(group: DeviceGroup): ScreenTarget {
     rendersAs: first && { id: first.id, name: first.name, deviceModel: first.deviceModel, palette: first.palette },
   }
 }
-
-/** A Screen without any one Device's state: what a Device's read and a Device Group's both carry, and what editing it needs. */
-export type ScreenBody = Omit<ScreenRead, 'deviceId' | 'readOnly' | 'state' | 'stateCause' | 'picked' | 'renderSignal' | 'imagePath' | 'renderedAt'>
 
 /** What Edit HTML needs of a Screen. */
 export type HtmlEditable = Pick<ScreenBody, 'id' | 'kind' | 'name' | 'html' | 'dither'>

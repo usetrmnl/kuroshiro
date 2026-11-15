@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { ScreenOwner } from 'kuroshiro-shared'
-import type { ScreenBody } from './screenTarget'
+import type { ScreenBody, ScreenOwner } from 'kuroshiro-shared'
 import { computed, ref } from 'vue'
 import { deleteScreen, unassignPlugin } from '@/api/screens'
 import Button from '@/components/Button.vue'

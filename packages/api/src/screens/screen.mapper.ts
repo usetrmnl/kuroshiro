@@ -1,4 +1,4 @@
-import type { GroupScreen, GroupScreenDeviceState, MashupLayout, MashupSlotRead, RenderSignal, ScheduleRead, ScreenRead, TemplateSize } from 'kuroshiro-shared'
+import type { GroupScreen, GroupScreenDeviceState, MashupLayout, MashupSlotRead, RenderSignal, ScheduleRead, ScreenBody, ScreenRead, TemplateSize } from 'kuroshiro-shared'
 import type { MashupConfiguration } from '../mashup/entities/mashup-configuration.entity.js'
 import type { ScreenStateRead } from '../schedule/rotation.js'
 import type { Schedule } from '../schedule/schedule.entity.js'
@@ -92,8 +92,6 @@ function ditherOf(screen: Screen): boolean {
       return screen.dither
   }
 }
-
-type ScreenBody = Omit<ScreenRead, 'deviceId' | 'readOnly' | 'state' | 'stateCause' | 'picked' | 'renderSignal' | 'imagePath' | 'renderedAt'>
 
 function toScreenBody(screen: Screen, facts: ScreenBodyFacts): ScreenBody {
   const kind = screen.type

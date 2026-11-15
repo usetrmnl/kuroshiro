@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import type { ScreenBody } from 'kuroshiro-shared'
 import type { FetchChoice } from './fetchChoices'
-import type { ScreenBody } from './screenTarget'
 import { computed, ref, watch } from 'vue'
 import { IMAGE_NOT_FETCHED } from '@/api/refusalWording'
 import { refreshScreen, updateScreen } from '@/api/screens'
