@@ -1,4 +1,4 @@
-import type { DeviceManifestEntry, PluginManifestEntry } from '../../types.js'
+import type { DeviceGroupManifestEntry, DeviceManifestEntry, PluginManifestEntry, ScreenManifestEntry } from '../../types.js'
 import AdmZip from 'adm-zip'
 import { CONFIGURATION_REDACTION_SENTINEL } from 'kuroshiro-shared'
 import { describe, expect, it } from 'vitest'
@@ -25,13 +25,30 @@ describe('buildShowcaseArchiveZip', () => {
     expect(manifest.containsSecrets).toBe(false)
   })
 
-  it('carries one Device, authored with no fixed apikey', () => {
+  it('carries its Devices, authored with no fixed apikey', () => {
     const zip = new AdmZip(buildShowcaseArchiveZip())
     const devices = readJson<DeviceManifestEntry[]>(zip, CONFIG_ARCHIVE_FILES.devices)
 
-    expect(devices).toHaveLength(1)
-    expect(devices[0].apikey).toBe(CONFIGURATION_REDACTION_SENTINEL)
-    expect(devices[0].mirrorApikey).toBeNull()
+    expect(devices).toHaveLength(3)
+    for (const device of devices) {
+      expect(device.apikey).toBe(CONFIGURATION_REDACTION_SENTINEL)
+      expect(device.mirrorApikey).toBeNull()
+    }
+  })
+
+  it('carries one Device Group of two Devices of different Device Models, with a Plugin Screen and a File Screen of its own', () => {
+    const zip = new AdmZip(buildShowcaseArchiveZip())
+    const groups = readJson<DeviceGroupManifestEntry[]>(zip, CONFIG_ARCHIVE_FILES.deviceGroups)
+    const devices = readJson<DeviceManifestEntry[]>(zip, CONFIG_ARCHIVE_FILES.devices)
+    const screens = readJson<ScreenManifestEntry[]>(zip, CONFIG_ARCHIVE_FILES.screens)
+
+    expect(groups).toHaveLength(1)
+    const members = devices.filter(device => device.deviceGroupId === groups[0].id)
+    expect(members).toHaveLength(2)
+    expect(new Set(members.map(member => member.deviceModelName)).size).toBe(2)
+    const owned = screens.filter(screen => screen.owner?.kind === 'deviceGroup' && screen.owner.id === groups[0].id)
+    expect(owned.map(screen => screen.type)).toEqual(['plugin', 'file'])
+    expect(zip.getEntry(`screens/${owned[1].id}.original`)).toBeTruthy()
   })
 
   it('carries only Poll Plugins whose fetch Data Sources name a public https address', () => {

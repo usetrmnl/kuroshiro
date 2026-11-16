@@ -1,6 +1,6 @@
 # Screens
 
-A **Screen** is one unit of content in a Device's Rotation. Screens play in their **Order**, which you rearrange by drag and drop, and the Rotation advances one step on every poll, skipping any Screen that is not eligible right now.
+A **Screen** is one unit of content in a Device's Rotation. It belongs either to a Device or to a [Device Group](./devices#device-groups), whose members all show it. Screens play in their **Order**, which you rearrange by drag and drop, and the Rotation advances one step on every poll, skipping any Screen that is not eligible right now.
 
 <ThemedShot name="device-screens" />
 
@@ -25,6 +25,10 @@ The HTML editor previews the Screen for its Device as you type.
 ## Mashups
 
 A Mashup combines multiple Plugin outputs into one Screen using one of 7 layouts: `1L×1R`, `1T×1B`, `1L×2R`, `2L×1R`, `2T×1B`, `1T×2B` and `2×2`. Mashups use the official TRMNL CSS framework. If one Plugin fails to render, an error placeholder takes its slot and the rest of the Mashup still displays.
+
+## Screens of a Device Group
+
+A Screen added to a [Device Group](./devices#device-groups) is shown by every member, rendered for each member's own Device Model and Palette. Order and Schedules are the Group's, and each member keeps its own place in the Rotation.
 
 ## Schedules
 

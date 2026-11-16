@@ -105,3 +105,6 @@ export const JOKE_PLUGIN: ShowcasePlugin = {
 }
 
 export const SHOWCASE_PLUGINS: ShowcasePlugin[] = [WEATHER_PLUGIN, COUNTDOWN_PLUGIN, JOKE_PLUGIN]
+
+/** The picture of the Device Group's File Screen: a small greyscale landscape, a PNG as a user would upload one, which Configuration Import converts for each member's Device Model and Palette. */
+export const LOBBY_PICTURE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAKAAAABgCAAAAAC/TCZFAAABu0lEQVR42u3OR1IcQRBG4XewvLEAYSU8QiAG761AGBmEuUGvCAiIYZiumawuE7mob/9nPh6N48E47o3jzjj+G8etcfwzjr/G8cc4fhtnP/DGOK6N48o4Lo3jl3FcGMe5cfzMqHrmueEsl6rNZ0b+PL9ETrOoPlIvOcmh6qadcpxBVUe55SiD2kDllsP0qnq6MQfpOQJ1Y/bTcwTqxuwlV7mo1uwm5wxUre0H7iTnDFSt2U7OGahas5Weo083ZjM9R6BuzEZ6jkDdmPUMavuUW9YyqA1UblnNoaZPO6WVRVefepkpsNW0r8VKLu/yfGb8yOilznPDsnEsGcd341g0jm/GsWAc88ZFDpROMQLn4pE6oUeZjUScwu4yE4X0FHKZ6Qikr+a3mQomKk2vMxlKtJqd52sY8dDoAV+CiJ8GH5gIIP68f5C3z78QkfFGpDmvPzwvxrxJGI9PL4Ey6klC6V/xuhjxIDFon70FyrCWRKJ8R3vxWUXiUf3j/WKoL4lL8ZDOxWBPEl/fh3xcDDhJGn0eolxIQj0fUjv51EmScz9EjCuBJbAElsASWAJLYAksgSWwBJbAElgCE3oC7f736TZJ5GYAAAAASUVORK5CYII='

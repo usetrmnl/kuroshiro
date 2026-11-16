@@ -5,6 +5,7 @@ export const screenshots = {
   'html-editor': 'The HTML editor, previewing the Screen for its Device as you type',
   'device-settings': 'A Device\'s Settings',
   'device-logs': 'A Device\'s logs, as reported by its firmware',
+  'device-group': 'A Device Group: the Devices that are members, and the Screens they all show, each rendered for every member',
   'plugins': 'The Plugins list',
   'recipe-gallery': 'The Recipe Gallery: TRMNL\'s published Recipes, searched, filtered by category and ordered by installs',
   'plugin': 'A Plugin: its Template with a live preview, Data Sources, Field Values, Devices and source Recipe',

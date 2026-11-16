@@ -1,3 +1,4 @@
+import type { DeviceGroup } from 'kuroshiro-shared'
 import type { AddressInfo } from 'node:net'
 import type { Browser, Page } from 'playwright'
 import type { RunningApi } from '../real-api/environment/api.ts'
@@ -15,7 +16,7 @@ import { startDatabase } from '../real-api/environment/database.ts'
 import { capture } from './capture.ts'
 import { FJORD_SVG, tideChartSvg } from './content.ts'
 import { instanceApi } from './instanceApi.ts'
-import { seedBedroom, seedHallway, seedKitchen, seedOffice, seedPlugins } from './seed.ts'
+import { seedBedroom, seedHallway, seedKitchen, seedLobby, seedOffice, seedPlugins } from './seed.ts'
 
 /** The Bedroom's refresh rate of a minute times the smallest offline multiplier, and a margin. */
 const BEDROOM_OFFLINE_AFTER_MS = 2 * 60_000 + 10_000
@@ -49,6 +50,7 @@ describe('the showcase', () => {
   let tideChart: Awaited<ReturnType<typeof serveImage>>
   let plugins: ShowcasePlugins
   let kitchen: ShowcaseDevice
+  let group: DeviceGroup
 
   const baseUrl = () => api.baseUrl
 
@@ -80,9 +82,11 @@ describe('the showcase', () => {
     const bedroomSeenAt = Date.now()
     await seedBedroom(instance, baseUrl())
     plugins = await seedPlugins(instance, baseUrl())
-    kitchen = await seedKitchen(instance, baseUrl(), plugins, { fjord: await rasterize(browser, FJORD_SVG), tideChartUrl: tideChart.url })
+    const fjord = await rasterize(browser, FJORD_SVG)
+    kitchen = await seedKitchen(instance, baseUrl(), plugins, { fjord, tideChartUrl: tideChart.url })
     const office = await seedOffice(instance, baseUrl(), plugins)
     await seedHallway(instance, baseUrl(), plugins)
+    group = await seedLobby(instance, baseUrl(), plugins, fjord)
 
     await expect.poll(async () => (await instance.plugin(plugins.waste.id)).dataSources[0]!.fetchFailureStreak, { timeout: 150_000, interval: 5_000 }).toBeGreaterThan(0)
     await sleep(Math.max(0, bedroomSeenAt + BEDROOM_OFFLINE_AFTER_MS - Date.now()))
@@ -115,6 +119,11 @@ describe('the showcase', () => {
       },
       { name: 'device-settings', path: `${devicePath}/settings`, ready: page => page.getByText('Refresh rate').first().waitFor() },
       { name: 'device-logs', path: `${devicePath}/logs`, ready: page => page.getByText('display poll, served Kitchen dashboard').waitFor() },
+      {
+        name: 'device-group',
+        path: `device-groups/${group.id}`,
+        ready: page => page.getByRole('list', { name: 'Devices in the Group' }).getByRole('link', { name: 'Reception' }).waitFor(),
+      },
       { name: 'plugins', path: 'plugins', ready: page => page.getByText('Tram departures').first().waitFor() },
       {
         name: 'recipe-gallery',

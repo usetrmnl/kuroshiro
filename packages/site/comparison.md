@@ -16,13 +16,13 @@ Kuroshiro isn't the only way to run a TRMNL: the device also works with the offi
 | Device models & palettes | Full official catalog synced daily, plus admin-created custom colour Palettes | Device models & palettes supported | Defines the catalog—sells the hardware |
 | Plugins | `Poll` (multiple named Data Sources, each fetched or a literal value) & `Webhook` (3 merge strategies) | "Extensions"/Exchanges, single- or multi-source polling | 1,000+ native, community & private plugins |
 | Recipe import | Browse, search and sort the trmnl.com catalog in the admin UI and import in one click, or paste an id—serverless-transform Recipes included, which Terminus's importer rejects | Imports via its Extension Gallery | Native—it's the source catalog |
-| Screen scheduling | Per-Screen day/time Schedule gates rotation eligibility | Playlist model: weekday/date windows, skip-if-stale TTL, device-grouped playlists | Playlist Scheduler, group scheduling by time of day |
+| Screen scheduling | Per-Screen day/time Schedule gates rotation eligibility; Screens can be shared by a Device Group | Playlist model: weekday/date windows, skip-if-stale TTL, device-grouped playlists | Playlist Scheduler, group scheduling by time of day |
 | Mashups | 7 layouts | Supported | 8 layouts |
 | Firmware | Official sync + custom OTA upload, hard-blocked unless the Firmware is compatible with the Device's model | Official sync + custom upload, no model-compatibility link | Manages its own hardware directly |
 | Sensors | Device-attached Qwiic sensors (CO₂/humidity/pressure/temperature), exposed to Plugin templates | Device-attached *and* server-attached (Raspberry Pi) sensors | — |
 | Sleep Mode | Per-Device night window that parks the Device until the window ends, with an optional dedicated sleep Screen | Supported | Supported |
 
-The short version: Kuroshiro trades Terminus's multi-user accounts and device-grouped playlists for a simpler single-admin, single-container deployment, while going further than either self-hosted option on per-Device-Model firmware safety and mixed fetch/literal Data Sources within one Plugin.
+The short version: Kuroshiro trades Terminus's multi-user accounts for a simpler single-admin, single-container deployment, while going further than either self-hosted option on per-Device-Model firmware safety and mixed fetch/literal Data Sources within one Plugin.
 
 ## Every BYOS at a glance
 
@@ -50,7 +50,7 @@ TRMNL keeps a [feature matrix of BYOS implementations](https://docs.trmnl.com/go
 
 </div>
 
-¹ As a per-Device Rotation of Screens, each gated by its own day/time Schedule, rather than named playlists shared between Devices.
+¹ As a Rotation of Screens, each gated by its own day/time Schedule, owned by a Device or shared by a Device Group, rather than named playlists.
 
 The other servers' columns are TRMNL's own assessment as of October 2026; the Kuroshiro column is ours.
 
