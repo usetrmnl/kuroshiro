@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/usetrmnl/kuroshiro/compare/kuroshiro-v0.25.0...kuroshiro-v0.26.0) (2026-11-16)
+
+
+### Features
+
+* **api:** ship the TRMNL Frame in the bundled Device Model snapshot ([#1802](https://github.com/usetrmnl/kuroshiro/issues/1802)) ([c295ac1](https://github.com/usetrmnl/kuroshiro/commit/c295ac140df56b0c4ec0360b4e9fcd2ac62ff3ab))
+
 ## [0.25.0](https://github.com/usetrmnl/kuroshiro/compare/kuroshiro-v0.24.0...kuroshiro-v0.25.0) (2026-11-15)
 
 
