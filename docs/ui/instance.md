@@ -513,7 +513,9 @@ Refused, as ADR-0075 decided. With no authentication, the admin's own browser is
 - **What the server reports as its timezone** when `TZ` is not set.
 - **The numbers a custom Palette's family expects.** The server accepts any number of colours for any family. The form does not say "three" for a three-ink family; whether it should is the API ticket's call.
 - **What a Device shows about a missing Firmware file.** A Device whose target Firmware has no file retries at every poll without saying so. Its Settings page belongs to [devices.md](./devices.md).
-- **Authentication.** No admin route asks for any, `/metrics` included, and `/api/setup` hands a registered Device's API key to anyone who knows its MAC address. The page says who can read the metrics; it does not say that the admin UI itself is open. That is a decision about the product, not about this page. What the API does refuse without authentication is in [Requests from another site](#requests-from-another-site).
+- **Device API keys at `/api/setup`.** `/api/setup` hands a registered Device's API key to anyone who knows its MAC address. That is a firmware-protocol question, apart from the admin password ([ADR-0079](../adr/0079-an-optional-admin-password-guards-the-admin-ui-and-api.md)).
+
+**Authentication** is decided by [ADR-0079](../adr/0079-an-optional-admin-password-guards-the-admin-ui-and-api.md): with `KUROSHIRO_ADMIN_PASSWORD` set the app opens on a password page and the bar shows "Sign out"; without it the admin UI is open. What the API refuses without authentication is in [Requests from another site](#requests-from-another-site).
 
 
 [proto]: https://github.com/usetrmnl/kuroshiro/blob/f3eb076/packages/ui/prototypes/instance-surfaces

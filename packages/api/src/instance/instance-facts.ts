@@ -5,6 +5,7 @@ export interface InstanceFactsSource {
   serverUrl: string
   timezone: string
   demoMode: boolean
+  adminPasswordSet: boolean
   appriseUrl: string | undefined
   limits: InstanceLimits
 }
@@ -45,6 +46,7 @@ export function toInstanceFacts(source: InstanceFactsSource): InstanceFacts {
     serverUrlIsLoopback: isLoopbackUrl(source.serverUrl),
     timezone: source.timezone,
     demoMode: source.demoMode,
+    adminPasswordSet: source.adminPasswordSet,
     notifications: {
       configured: !!source.appriseUrl,
       appriseUrl: source.appriseUrl ? withoutCredentials(source.appriseUrl) : null,

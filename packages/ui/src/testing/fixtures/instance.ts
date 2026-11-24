@@ -17,6 +17,7 @@ export const buildInstanceFacts = defineBuilder<InstanceFacts>(() => ({
   serverUrlIsLoopback: false,
   timezone: 'Europe/Berlin',
   demoMode: false,
+  adminPasswordSet: false,
   notifications: { configured: false, appriseUrl: null },
   limits: {
     imageUploadBytes: 10 * 1024 * 1024,

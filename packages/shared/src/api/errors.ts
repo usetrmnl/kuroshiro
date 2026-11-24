@@ -75,6 +75,9 @@ export const API_ERROR_CODES = [
   'device-group-not-found',
   'device-group-name-taken',
   'cross-site-request',
+  'sign-in-required',
+  'wrong-password',
+  'too-many-sign-in-attempts',
 ] as const
 
 export type ApiErrorCode = typeof API_ERROR_CODES[number]

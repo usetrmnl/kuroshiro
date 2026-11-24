@@ -125,6 +125,9 @@ const REFUSAL_WORDING: Record<ApiErrorCode, Wording> = {
   'device-group-not-found': 'There is no such Device Group.',
   'device-group-name-taken': 'There is already a Device Group with that name.',
   'cross-site-request': 'Kuroshiro only takes changes from its own admin UI. Open it at its own address and try again.',
+  'sign-in-required': 'Sign in with the admin password.',
+  'wrong-password': 'That is not the admin password.',
+  'too-many-sign-in-attempts': 'Too many wrong passwords from this address. Wait a minute and try again.',
 }
 
 /** A code this build does not know, from a newer server, falls back on the server's own sentence. */

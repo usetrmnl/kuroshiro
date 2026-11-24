@@ -79,6 +79,9 @@ const wording: Record<ApiErrorCode, string> = {
   'device-group-not-found': 'There is no such Device Group.',
   'device-group-name-taken': 'There is already a Device Group with that name.',
   'cross-site-request': 'Only the admin UI itself can make changes.',
+  'sign-in-required': 'Sign in with the admin password.',
+  'wrong-password': 'That is not the admin password.',
+  'too-many-sign-in-attempts': 'Too many wrong passwords.',
 }
 
 function wordingBySwitch(code: ApiErrorCode): string {
@@ -147,6 +150,9 @@ function wordingBySwitch(code: ApiErrorCode): string {
     case 'device-group-not-found':
     case 'device-group-name-taken':
     case 'cross-site-request':
+    case 'sign-in-required':
+    case 'wrong-password':
+    case 'too-many-sign-in-attempts':
     case 'conflict':
     case 'payload-too-large':
     case 'unprocessable':

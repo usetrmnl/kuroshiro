@@ -7,6 +7,7 @@ import { ServeStaticModule } from '@nestjs/serve-static'
 import { TypeOrmModule } from '@nestjs/typeorm'
 import { AlertsModule } from './alerts/alerts.module.js'
 import { Alert } from './alerts/entities/alert.entity.js'
+import { AuthModule } from './auth/auth.module.js'
 import config from './config/config.js'
 import { migrationLogger } from './config/migration-logger.js'
 import { ConfigurationModule } from './configuration/configuration.module.js'
@@ -100,6 +101,7 @@ const conf = config()
     ConfigurationModule,
     SettingsModule,
     AlertsModule,
+    AuthModule,
     InstanceModule,
     MetricsModule,
     HealthModule,

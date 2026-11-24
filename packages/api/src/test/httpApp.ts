@@ -2,6 +2,8 @@ import type { INestApplication, ModuleMetadata } from '@nestjs/common'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import type { AddressInfo } from 'node:net'
 import { Test } from '@nestjs/testing'
+import { AdminAuth } from '../auth/admin-auth.js'
+import { registerAdminPassword } from '../auth/admin-password.guard.js'
 import { registerCrossSiteRefusal } from '../cross-site/cross-site.guard.js'
 import { registerErrorEnvelope } from '../errors/register-error-envelope.js'
 import { registerBodyParsers } from '../uploads/register-body-parsers.js'
@@ -20,12 +22,14 @@ export interface HttpTestApp {
  * as `main.ts` and serves them on a free port, so a spec can assert on what
  * actually goes over the wire.
  */
-export async function createHttpTestApp(metadata: ModuleMetadata): Promise<HttpTestApp> {
-  const moduleRef = await Test.createTestingModule(metadata).compile()
+export async function createHttpTestApp(metadata: ModuleMetadata, adminPassword?: string): Promise<HttpTestApp> {
+  const auth = new AdminAuth(adminPassword)
+  const moduleRef = await Test.createTestingModule({ ...metadata, providers: [...metadata.providers ?? [], { provide: AdminAuth, useValue: auth }] }).compile()
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false, bodyParser: false })
   registerBodyParsers(app)
   app.setGlobalPrefix('api', { exclude: ['metrics', 'health'] })
   registerErrorEnvelope(app)
+  registerAdminPassword(app, auth)
   registerCrossSiteRefusal(app)
   await app.listen(0)
   const { port } = app.getHttpServer().address() as AddressInfo
