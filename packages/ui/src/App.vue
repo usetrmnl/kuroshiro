@@ -1,20 +1,27 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { isRefusal } from '@/api/client'
-import { getInstanceFacts } from '@/api/instance'
+import { ref } from 'vue'
+import { signInRequired } from '@/api/client'
+import { useAlerts, useDevices, useInstanceFacts } from '@/reads/sharedReads'
 import AppShell from './shell/AppShell.vue'
 import SignInPage from './shell/SignInPage.vue'
 
-/** Whether the admin API let the browser in: it answers `sign-in-required` to everything until an Instance with a password has been signed in to. */
-const state = ref<'asking' | 'signed-out' | 'in'>('asking')
+signInRequired.value = false
+const facts = useInstanceFacts()
+const devices = useDevices()
+const alerts = useAlerts()
+/** Bumped by a sign-in so every page loads again, as it was refused before. */
+const signIns = ref(0)
 
-onMounted(async () => {
-  // Any other failure is for the page's own loads to show.
-  state.value = await getInstanceFacts().then(() => 'in' as const, error => isRefusal(error, 'sign-in-required') ? 'signed-out' as const : 'in' as const)
-})
+function signedIn() {
+  signInRequired.value = false
+  signIns.value++
+  facts.reload()
+  devices.reload()
+  alerts.reload()
+}
 </script>
 
 <template>
-  <AppShell v-if="state === 'in'" />
-  <SignInPage v-else-if="state === 'signed-out'" @signed-in="state = 'in'" />
+  <SignInPage v-if="signInRequired" @signed-in="signedIn" />
+  <AppShell v-else :key="signIns" />
 </template>
