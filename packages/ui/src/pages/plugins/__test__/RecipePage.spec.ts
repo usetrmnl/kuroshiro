@@ -4,6 +4,7 @@ import { expectAccessible } from '@/testing/a11y'
 import { apiErrorResponse } from '@/testing/api/server'
 import { mountApp } from '@/testing/app'
 import { buildRecipeDetail } from '@/testing/fixtures/plugins'
+import { expectNoHorizontalOverflow } from '@/testing/overflow'
 import { fakeGallery, MOON_PHASE, mountGallery } from './recipeGalleryHarness'
 
 async function mountRecipe(at = '/plugins/recipes/41120') {
@@ -25,6 +26,7 @@ describe('a Recipe\'s own page', () => {
     await expect.element(screen.getByRole('button', { name: 'Import Recipe' })).toBeVisible()
     await expect.element(screen.getByRole('link', { name: 'Recipes', exact: true })).toHaveAttribute('href', '/plugins/recipes')
     await expectAccessible()
+    await expectNoHorizontalOverflow()
   })
 
   it('is drawn without the list\'s facts, and without "More by this author", when reached by its address', async () => {

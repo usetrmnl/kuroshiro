@@ -316,7 +316,6 @@ function typedByHandOf(recipeSettings: RecipeSettings): string[] {
 /** A transform with no URL to fetch for it: it computes from the Field Values, or fetches on its own, over an empty value (ADR-0051). */
 const selfFetchingDataSource = (transformJs: string): ParsedDataSource => ({ name: 'source', mode: 'literal', literalValue: {}, transformJs })
 
-/** A Plugin read from a Recipe, tied to it by the Recipe's id, with the names of its Plugin Fields typed by hand where TRMNL lists choices. */
 /** A Recipe read without importing it: the Plugin it would become, or the little a refused one still says, and why it is refused. */
 export interface RecipePreview {
   recipeId: string
@@ -324,6 +323,7 @@ export interface RecipePreview {
   refusal: RecipeRefusal | null
 }
 
+/** A Plugin read from a Recipe, tied to it by the Recipe's id, with the names of its Plugin Fields typed by hand where TRMNL lists choices. */
 export type RecipePlugin = ParsedPlugin & { sourceRecipeId: string, typedByHand: string[] }
 
 /** What a Recipe import keeps as the Recipe Snapshot: the Plugin as read, without what only the import's answer reports. */
@@ -536,7 +536,7 @@ export class PluginImporterService {
         throw error
       }
       const settings = openZip(archive)?.getEntry('settings.yml')?.getData().toString('utf8')
-      return { recipeId, plugin: this.describeRefusedRecipe(settings ?? ''), refusal: { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) } }
+      return { recipeId, plugin: this.describeRefusedRecipe(settings ?? ''), refusal: { code: error.code, message: error.message, details: error.details ?? null } }
     }
   }
 

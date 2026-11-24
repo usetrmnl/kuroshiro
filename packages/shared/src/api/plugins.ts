@@ -468,7 +468,7 @@ export interface RecipeRefusal {
   code: ApiErrorCode
   message: string
   /** What the refusal says beyond its code, such as the strategy: what its wording is made from. */
-  details?: Record<string, unknown>
+  details: Record<string, unknown> | null
 }
 
 /**

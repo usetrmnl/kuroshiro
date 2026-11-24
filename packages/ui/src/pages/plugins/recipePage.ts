@@ -9,12 +9,12 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
  */
 export function handedRecipe(state: unknown, recipeId: string): RecipeSummary | undefined {
   const handed = isRecord(state) ? state.recipe : undefined
-  return isRecord(handed) && handed.id === recipeId && typeof handed.name === 'string' ? handed as unknown as RecipeSummary : undefined
+  return isRecord(handed) && handed.id === recipeId && typeof handed.name === 'string' && typeof handed.installs === 'number' ? handed as unknown as RecipeSummary : undefined
 }
 
 /** Why the import would refuse the Recipe, in the import's own wording; none when it would go through. */
 export function refusalLine(recipe: RecipeDetail): string | undefined {
-  return recipe.refusal ? wordRefusal({ statusCode: 422, ...recipe.refusal }) : undefined
+  return recipe.refusal ? wordRefusal({ statusCode: 422, ...recipe.refusal, details: recipe.refusal.details ?? undefined }) : undefined
 }
 
 export const fieldNeed = (required: boolean) => required ? 'Required' : 'Optional'

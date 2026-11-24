@@ -99,7 +99,7 @@ describe('the Recipe detail read model', () => {
   })
 
   it('carries the refusal the import would give', () => {
-    const refusal = { code: 'recipe-strategy-unsupported' as const, message: 'No.' }
+    const refusal = { code: 'recipe-strategy-unsupported' as const, message: 'No.', details: null }
     expect(toRecipeDetail({ recipeId: '7', plugin, refusal }).refusal).toEqual(refusal)
   })
 })
