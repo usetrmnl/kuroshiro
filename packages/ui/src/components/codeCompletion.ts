@@ -45,3 +45,23 @@ export function keysUnder(data: Record<string, unknown>, path: readonly string[]
     return LIST_KEYS.map(label => ({ label }))
   return isObject(value) ? withKinds(value) : []
 }
+
+const DEFINITION = /\{%-?\s*template\s+([\w/]+)\s*-?%\}/g
+const TAG_START = /\{%-?\s*(\w*)$/
+const RENDER_NAME = /\{%-?\s*render\s+["']([^"'\s]*)$/
+
+/** What the text before the cursor asks of completion inside a `{% %}`: a tag's name, or the name a `render` draws. */
+export type TagAsk = { kind: 'tag', typed: string } | { kind: 'template', typed: string }
+
+export function tagAskOf(before: string): TagAsk | null {
+  const name = RENDER_NAME.exec(before)
+  if (name)
+    return { kind: 'template', typed: name[1]! }
+  const tag = TAG_START.exec(before)
+  return tag ? { kind: 'tag', typed: tag[1]! } : null
+}
+
+/** The names `{% template name %}` defines in the text, in order; a `render` can draw only those above it (ADR-0050). */
+export function definedTemplatesIn(text: string): string[] {
+  return [...new Set([...text.matchAll(DEFINITION)].map(match => match[1]!))]
+}

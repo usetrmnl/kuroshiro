@@ -140,6 +140,44 @@ export const TRMNL_FILTERS: readonly string[] = [...Object.keys(trmnlFilters), .
 /** The filters Kuroshiro alone adds; the editor marks them "Kuroshiro". */
 export const KUROSHIRO_FILTERS: readonly string[] = [...Object.keys(zonedFilters(undefined)), ...Object.keys(kuroshiroFilters)]
 
+/**
+ * The tags Kuroshiro's engine renders, which the editor completes after `{%` in place of `@codemirror/lang-liquid`'s own
+ * list: that one offers `include`, `layout`, `section` and `paginate`, which the engine refuses, and lacks `when`
+ * and `template`. A closing tag is offered as its own name, so `endtemplate` is here beside `template`.
+ */
+export const KUROSHIRO_TAGS: readonly string[] = [
+  'assign',
+  'break',
+  'capture',
+  'case',
+  'comment',
+  'continue',
+  'cycle',
+  'decrement',
+  'echo',
+  'else',
+  'elsif',
+  'endcapture',
+  'endcase',
+  'endcomment',
+  'endfor',
+  'endif',
+  'endraw',
+  'endtablerow',
+  'endtemplate',
+  'endunless',
+  'for',
+  'if',
+  'increment',
+  'liquid',
+  'raw',
+  'render',
+  'tablerow',
+  'template',
+  'unless',
+  'when',
+]
+
 function refusePartial(name: string): never {
   throw new Error(`A template cannot render "${name}": Kuroshiro has no partials.`)
 }

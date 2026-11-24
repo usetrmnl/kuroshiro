@@ -232,6 +232,21 @@ describe('code editor: completion', () => {
     await expect.poll(await completionsAfter('{{{{ forecast.hourly.')).toEqual(['first', 'last', 'size'])
   })
 
+  it('offers the tags the engine renders after {%, template among them and include not', async () => {
+    const tags = ['if', 'endif', 'template', 'endtemplate', 'render']
+    const offered = await completionsAfter('{{% te', { dialectTags: tags })
+    await expect.poll(offered).toEqual(['template'])
+    const all = await completionsAfter('{{% ', { dialectTags: tags })
+    await expect.poll(all).toEqual(expect.arrayContaining(tags))
+    expect(all()).not.toContain('include')
+  })
+
+  it('offers after {% render " the names defined above the cursor', async () => {
+    const text = '{% template card %}{% endtemplate %}{% template row %}{% endtemplate %}{% render "'
+    const offered = await completionsAfter('', { modelValue: text, dialectTags: ['template', 'render'] })
+    await expect.poll(offered).toEqual(['card', 'row'])
+  })
+
   it('offers Liquid\'s filters after a pipe and marks the given ones with their dialect', async () => {
     const offered = await completionsAfter('{{{{ location | ')
 

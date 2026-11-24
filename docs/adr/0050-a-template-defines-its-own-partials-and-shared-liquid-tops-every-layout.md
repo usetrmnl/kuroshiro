@@ -17,4 +17,4 @@ Considered and rejected:
 - A Recipe whose layouts draw named templates renders unmodified, and so does one whose `shared.liquid` holds only `<style>` or `<link>` markup.
 - A Plugin imported before this keeps its inlined `main`; nothing is migrated.
 - `{% render "main" %}` without arguments now draws `main` with an empty scope, as on TRMNL, where before the inlined `main` read the layout's variables.
-- The editor's completion does not yet offer the `template` tag or the names a Template defines.
+- The editor's completion offers the `template` tag and the names a Template defines above the cursor.
