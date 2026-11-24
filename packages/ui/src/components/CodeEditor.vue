@@ -25,6 +25,8 @@ const props = withDefaults(defineProps<{
   completionData?: Record<string, unknown>
   /** Liquid only: the filters the dialect adds to Liquid, which completion marks with the dialect's name ("TRMNL", "Kuroshiro"). */
   dialectFilters?: readonly FilterCompletion[]
+  /** Liquid only: the tags the engine renders. After `{%` completion offers these in place of the language's own; without them it offers the language's. */
+  dialectTags?: readonly string[]
   /** Names the document the text belongs to. When it changes, the document that leaves keeps its undo history and cursor for its return. */
   document?: string
   /** Holds the block shown while the editor is fetched, for the gallery. */
@@ -75,7 +77,7 @@ let unmounted = false
 
 const hasStrip = computed(() => props.size !== 'code-input')
 
-const completion = computed(() => ({ data: props.completionData, filters: props.dialectFilters }))
+const completion = computed(() => ({ data: props.completionData, filters: props.dialectFilters, tags: props.dialectTags }))
 
 async function fetchEditor() {
   try {

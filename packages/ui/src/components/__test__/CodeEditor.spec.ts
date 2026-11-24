@@ -44,6 +44,8 @@ async function mountFocused(props: Record<string, unknown> = {}) {
   return mounted
 }
 
+const TAGS = ['if', 'endif', 'template', 'endtemplate', 'render']
+
 const pressed = (keys: string) => userEvent.keyboard(keys)
 const lastTextOf = (onUpdate: ReturnType<typeof vi.fn>) => onUpdate.mock.lastCall?.[0]
 
@@ -60,7 +62,8 @@ function completionsOf(screen: Screen) {
  */
 async function completionsAfter(typed: string, props: Record<string, unknown> = {}) {
   const { screen } = await mountFocused({ completionData: DATA, dialectFilters: [...filtersOf('TRMNL', ['pluralize']), ...filtersOf('Kuroshiro', ['date_short', 'yesno'])], ...props })
-  await pressed(typed)
+  if (typed)
+    await pressed(typed)
   await pressed('{Control>} {/Control}')
   return () => completionsOf(screen)
 }
@@ -230,6 +233,23 @@ describe('code editor: completion', () => {
 
   it('offers first, last and size for a list', async () => {
     await expect.poll(await completionsAfter('{{{{ forecast.hourly.')).toEqual(['first', 'last', 'size'])
+  })
+
+  it('offers the tags the engine renders after {%, template among them and include not', async () => {
+    const offered = await completionsAfter('{{% te', { dialectTags: TAGS })
+    await expect.poll(offered).toEqual(['template', 'endtemplate'])
+  })
+
+  it('offers every tag the engine renders on an empty {%, and not include', async () => {
+    const offered = await completionsAfter('{{% ', { dialectTags: TAGS })
+    await expect.poll(offered).toEqual(expect.arrayContaining(TAGS))
+    expect(offered()).not.toContain('include')
+  })
+
+  it('offers after {% render " the names defined above the cursor', async () => {
+    const text = '{% template card %}{% endtemplate %}{% template row %}{% endtemplate %}\n'
+    const offered = await completionsAfter('{{% render "', { modelValue: text, dialectTags: ['template', 'render'] })
+    await expect.poll(offered).toEqual(['card', 'row'])
   })
 
   it('offers Liquid\'s filters after a pipe and marks the given ones with their dialect', async () => {
