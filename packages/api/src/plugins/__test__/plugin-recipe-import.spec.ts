@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import AdmZip from 'adm-zip'
 import * as yaml from 'js-yaml'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { InstanceTimeZone } from '../../instance/instance-time-zone.js'
 import { makePlugin, makePluginDataSource, makePluginField, makePluginTemplate } from '../../test/fixtures.js'
 import { PluginExporterService } from '../services/plugin-exporter.service.js'
@@ -609,6 +609,49 @@ describe('pluginImporterService recipe import', () => {
       })
 
       expect(markup).toBe('<p>2 books, 25 Jan</p>')
+    })
+  })
+
+  describe('previewRecipe', () => {
+    function serving(archive: Buffer | null) {
+      const service = new PluginImporterService()
+      vi.spyOn(service as unknown as { download: () => Promise<Buffer | null> }, 'download').mockResolvedValue(archive)
+      return service
+    }
+
+    it('describes a Recipe it would import, and saves nothing', async () => {
+      const archive = buildFlatRecipeArchive({
+        name: 'Daily Weather',
+        strategy: 'polling',
+        polling_url: 'https://api.example.com/weather',
+        custom_fields: [{ keyname: 'about', field_type: 'author_bio', name: 'About', description: 'By me' }, { keyname: 'city', field_type: 'string', name: 'City' }],
+      })
+
+      const preview = await serving(archive).previewRecipe('https://trmnl.com/recipes/daily-150460')
+
+      expect(preview.recipeId).toBe('150460')
+      expect(preview.refusal).toBeNull()
+      expect(preview.plugin.name).toBe('Daily Weather')
+      expect(preview.plugin.fields.map(field => field.keyname)).toEqual(['about', 'city'])
+      expect(preview.plugin.dataSources[0].url).toBe('https://api.example.com/weather')
+    })
+
+    it('still describes a Recipe the import refuses, with the import\'s own refusal', async () => {
+      const archive = buildFlatRecipeArchive({ name: 'Merged', strategy: 'plugin_merge', custom_fields: [{ keyname: 'city', field_type: 'string', name: 'City' }] })
+
+      const preview = await serving(archive).previewRecipe('1')
+
+      expect(preview.refusal).toMatchObject({ code: 'recipe-strategy-unsupported', message: expect.stringMatching(/other TRMNL plugins/) })
+      expect(preview.plugin).toMatchObject({ name: 'Merged', fields: [{ keyname: 'city' }] })
+    })
+
+    it('refuses a bad id and a Recipe TRMNL does not have, as the import does', async () => {
+      await expect(serving(null).previewRecipe('nope')).rejects.toMatchObject({ code: 'recipe-id-invalid' })
+      await expect(serving(null).previewRecipe('9')).rejects.toMatchObject({ code: 'recipe-not-found' })
+    })
+
+    it('refuses what is no Recipe archive as TRMNL not answering', async () => {
+      await expect(serving(Buffer.from('not a zip')).previewRecipe('9')).rejects.toMatchObject({ code: 'upstream-unreachable' })
     })
   })
 })

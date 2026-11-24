@@ -4,7 +4,7 @@ import { expect } from 'vitest'
 import { api, apiErrorResponse, apiUrl } from '@/testing/api/server'
 import { fakeShellReads, mountApp } from '@/testing/app'
 import { buildDeviceSummary } from '@/testing/fixtures/devices'
-import { buildPluginImportResult, buildRecipeGalleryPage, buildRecipeSummary } from '@/testing/fixtures/plugins'
+import { buildPluginImportResult, buildRecipeDetail, buildRecipeGalleryPage, buildRecipeSummary } from '@/testing/fixtures/plugins'
 import { fakeRecipeImages, TRMNL_IMAGE_BUCKET } from '@/testing/images'
 
 const KITCHEN = buildDeviceSummary({ id: 'kitchen', name: 'Kitchen' })
@@ -39,6 +39,8 @@ export interface FakedGallery {
   recipes: Answer
   /** What the categories read answers. */
   categories: () => Response | Promise<Response>
+  /** What the read of one Recipe answers, handed its id. */
+  recipe: (id: string) => Response | Promise<Response>
   /** What an import answers. */
   imported: () => Response | Promise<Response>
   plugins: PluginSummary[]
@@ -55,10 +57,11 @@ export const answerPage = (page: RecipeGalleryPage): Answer => () => HttpRespons
 export const refuseWith = (refusal: Partial<ApiError>) => () => apiErrorResponse(refusal)
 
 /** Fakes the shell's reads, the Gallery's two reads, the Plugins, a Recipe's import and the read of the Plugin it answers. */
-export function fakeGallery(overrides: Partial<Pick<FakedGallery, 'recipes' | 'categories' | 'imported' | 'plugins'>> = {}): FakedGallery {
+export function fakeGallery(overrides: Partial<Pick<FakedGallery, 'recipes' | 'categories' | 'recipe' | 'imported' | 'plugins'>> = {}): FakedGallery {
   const faked: FakedGallery = {
     recipes: answerPage(pageOf(RECIPES)),
     categories: () => HttpResponse.json(CATEGORIES),
+    recipe: id => HttpResponse.json(buildRecipeDetail({ id })),
     imported: () => HttpResponse.json(IMPORTED, { status: 201 }),
     plugins: [],
     asked: [],
@@ -69,6 +72,7 @@ export function fakeGallery(overrides: Partial<Pick<FakedGallery, 'recipes' | 'c
   fakeRecipeImages()
   api.use(
     http.get(apiUrl('recipes/categories'), () => faked.categories()),
+    http.get(apiUrl('recipes/:id'), ({ params }) => faked.recipe(String(params.id))),
     http.get(apiUrl('recipes'), ({ request }) => {
       const query = new URL(request.url).searchParams
       faked.asked.push(Object.fromEntries(query))

@@ -13,13 +13,14 @@ Everything under **Plugins** in the rebuilt admin UI except the template editor 
 |---|---|
 | `/plugins` | The Plugins list. `?q=` holds the search, `?show=problems` the filter. |
 | `/plugins/new` | Add a Plugin. `?way=recipe\|file\|github\|poll\|webhook` preselects the way; `?device=:deviceId` carries the Device the new Plugin is assigned to. |
-| `/plugins/recipes` | The Recipe Gallery. `?q=` holds the search, `?category=` the category, `?sort=` the order, `?device=:deviceId` carries the Device the imported Plugin is assigned to. The page reached by paging is not held. |
+| `/plugins/recipes` | The Recipe Gallery. `?q=` holds the search, `?category=` the category, `?author=:userId` one author's Recipes, `?sort=` the order, `?device=:deviceId` carries the Device the imported Plugin is assigned to. The page reached by paging is not held. |
+| `/plugins/recipes/:recipeId` | A Recipe's own page, drawn from its archive before anything is imported. `?device=:deviceId` carries the Device the imported Plugin is assigned to. |
 | `/plugins/:pluginId` | The Plugin page. `?source=:name` opens that Data Source's row and scrolls to it. The sections answer to `#template`, `#data`, `#values`, `#devices` and `#recipe`. |
 | `/plugins/:pluginId/update` | The Recipe Update Check, for a Plugin imported from a Recipe only. |
 
 A Plugin that does not exist gets the whole-page empty state of the shared patterns: "No Plugin here. It may have been deleted." with "All Plugins" ([render][missing]).
 
-In the bar, "Plugins" is current on all five. A Plugin page, the Recipe Gallery and the Recipe Update Check carry a back link above the title ("All Plugins", "All Plugins", and "{Plugin}").
+In the bar, "Plugins" is current on all six. A Plugin page, the Recipe Gallery and the Recipe Update Check carry a back link above the title ("All Plugins", "All Plugins", and "{Plugin}").
 
 ## The Plugins list
 
@@ -111,7 +112,7 @@ Each form ends with its primary button, "Cancel" (back to where the admin came f
 - The back link reads "All Plugins". Heading: "Recipes". Under it one line in `ink-soft`: "Ready-made Plugins published on trmnl.com. Importing one copies it into Kuroshiro; nothing updates by itself afterwards."
 - **The bar above the grid:** a search field, "Search Recipes"; a select "Category", holding "Every category" and then each of TRMNL's category slugs with its first letter capitalised; a select "Order", holding "Most installed" (chosen), "Most popular", "Newest" and "Oldest".
 - **The line under it:** "Showing {n} of {N} Recipes, most installed first", naming the order as the select has it, and "Showing {n} of {N} Recipes that match, most installed first" with a search or a category.
-- **A card**, one per Recipe: the Recipe's screenshot as a plate at the top; its name as the card's heading; its description under that in `ink-soft`, two lines at most; "{n} installs"; and at the bottom "Import" (primary) and the quiet link "On trmnl.com", which opens the Recipe's own page in a new tab. The card itself is not a link, because it carries two controls; each control's accessible name carries the Recipe ("Import {Recipe}", "{Recipe} on trmnl.com"). A Recipe whose screenshot cannot be loaded, or that has none, keeps the plate's empty look.
+- **A card**, one per Recipe: the Recipe's screenshot as a plate at the top; its name as the card's heading; its description under that in `ink-soft`, two lines at most; "{n} installs"; and at the bottom "Import" (primary) and the quiet link "On trmnl.com", which opens the Recipe's own page in a new tab. The card as a whole is not a link, because it carries several controls: the screenshot and the name are one link to the Recipe's own page, and each other control's accessible name carries the Recipe ("Import {Recipe}", "{Recipe} on trmnl.com"). A Recipe whose screenshot cannot be loaded, or that has none, keeps the plate's empty look.
 - **The pictures** are TRMNL's own addresses, loaded as they scroll into view and without a referrer, so the instance's address does not travel to TRMNL's bucket. They need a browser with internet access; a card without its picture still reads.
 - **A Recipe a Plugin already holds** says so above the buttons, in Add a Plugin's words: "You already have {Plugin} from this Recipe." The import is still allowed and makes a second Plugin.
 - **Import** does what Add a Plugin's "Import Recipe" does with the same id: the button shows the loading mark, the new Plugin's page opens, and a refusal is shown in the card with the problem icon, worded as Add a Plugin words it. The list cannot say in advance which Recipes will be refused — TRMNL does not publish a Recipe's strategy — so a refusal here is an ordinary outcome, not a bug.
@@ -128,7 +129,25 @@ Each form ends with its primary button, "Cancel" (back to where the admin came f
   | trmnl.com answers that it is over its request limit | "trmnl.com is busy with other requests. Wait a minute and try again." with "Try again" |
   | Kuroshiro's own server cannot be reached | The shared pattern's "Kuroshiro's server is not answering." |
 
+- **One author's Recipes.** `?author=` holds TRMNL's id for an author, passed on as TRMNL's `user_id` filter, and is held in the address like the search. With it a line under the heading reads "Showing the Recipes of one author." with the button "Show every author", which clears it; "Show every Recipe" in the empty state clears it too, and "No Recipe is by this author." is the empty state's sentence when nothing else is chosen. It is set only by a Recipe's page, through "More by this author".
+- **A card opens the Recipe's page too.** The screenshot and the name are one link to the Recipe's page and are handed the card's entry; "Import" stays on the card and stays one click.
 - The Gallery never asks the server again by itself. Nothing about a published Recipe changes while the admin is looking at it, so the 30-second refresh of the Device-facing views does not apply here.
+
+## A Recipe's own page
+
+`/plugins/recipes/:recipeId` · `?device=` the Device carried
+
+**For:** knowing what a Recipe is before importing it: what it asks for, which hosts it calls, and whether Kuroshiro would refuse it. The page saves nothing and holds nothing: it reads the Recipe's archive from trmnl.com through Kuroshiro's API on every visit, as the import does ([ADR-0073](../adr/0073-the-recipe-gallery-browses-trmnls-public-recipe-list-through-kuroshiros-api.md)). That is the one source that works for a pasted link, a reload and an unlisted id.
+
+- The back link reads "Recipes" and leads to the Gallery, with the carried Device. The title is the Recipe's name. Under it the Recipe's description in `ink-soft`.
+- **What only the list carries** — the screenshot as a plate, "{n} installs", "On trmnl.com" and the author's id — is shown when the admin arrived from a Gallery card, which hands its entry on. Reached any other way (a pasted address, a reload in a new tab, an unlisted Recipe) the page is drawn without them and is still complete.
+- **Refusal.** A Recipe the import would refuse (a strategy Kuroshiro does not import, a transform on a webhook, serverless code that is not JavaScript) says so with the problem icon and the import's own wording, and the page offers no "Import Recipe". Everything else about the Recipe is still shown. A trmnl.com that does not answer is a failed load with "Try again", as in the Gallery; a Recipe trmnl.com does not have is the import's own "TRMNL has no Recipe {id}."
+- **Author.** The section "Author" holds the Recipe's author text (its `author_bio` field) and the link "More by this author", which opens the Gallery with `?author=`. The link is shown only when the author's id is known, which is when the admin came from a card. TRMNL's list gives no author name, and the author's email address never enters Kuroshiro's wire type, so neither is shown.
+- **Plugin Fields.** The section "Plugin Fields": one line per field it will ask for, its name, "Required" or "Optional" and its description. A Recipe without any: "It asks for nothing when imported."
+- **Hosts it calls.** The section lists the host of each Data Source's address, once each, in `code`. None: "It calls no host."
+- **Import Recipe** (primary) is the import that Add a Plugin's Recipe way makes, with the Recipe's id and the carried Device; it shows the loading mark and the Plugin's page opens. Its refusals are worded as Add a Plugin words them. With a Device the line "It is assigned to {Device} as soon as it exists." stands beside it.
+- **No rendered preview** of the Recipe is drawn, and nothing is cached.
+- **Loading:** "Loading the Recipe". **Failed:** "Could not load the Recipe." with "Try again".
 
 ## The Plugin page
 
@@ -497,6 +516,7 @@ A request list for [Admin API reshaping for the new screens](https://github.com/
 9. A read for the category list TRMNL publishes, held in memory for an hour, so a failure of it costs the Gallery its category control and nothing else.
 10. Both of those refuse with a reason of their own: the existing `upstream-unreachable` when trmnl.com does not answer, and one new code for its request limit being spent, which the Gallery words as a wait rather than as a failure.
 11. A worded reason on every import refusal. Today nearly all of them are a server error with no reason: a bad id, a Recipe TRMNL does not have, OAuth, a pushed strategy, a file or repository without a Plugin, TRMNL or GitHub not answering. A Template that cannot be parsed is not a refusal: the Plugin is imported and the editor shows the problem, so a Recipe that works on TRMNL can be brought in and fixed.
+12. A read for one Recipe, `GET /api/recipes/:id`: the archive downloaded as the import downloads it and parsed with the importer, answering Kuroshiro's own wire type (id, name, description, the author's text, the Plugin Fields it asks for, the hosts its Data Sources call, and the refusal the import would give, with its code and details) and saving nothing. A refusal about what the Recipe contains is part of the answer; a bad id, a Recipe TRMNL does not have and TRMNL not answering refuse the read as they refuse the import. The Recipe's list entry carries TRMNL's `user_id` as `userId`, and the list read takes `author`, passed on as TRMNL's `user_id`.
 
 **To change**
 

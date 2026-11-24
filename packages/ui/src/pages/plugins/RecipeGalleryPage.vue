@@ -9,7 +9,7 @@ import TitleLine from '@/patterns/TitleLine.vue'
 import { useLoad } from '@/patterns/useLoad'
 import { useSearchInAddress } from '@/patterns/useSearchInAddress'
 import { useCarriedDevice } from './carriedDevice'
-import { categoryOf, categoryOptions, countLine, endLine, EVERY_CATEGORY, heldByRecipe, noMatchSentence, recipeHeadingId, searchable, sortOf, tooShort, useRecipeGallery } from './recipeGallery'
+import { authorOf, categoryOf, categoryOptions, countLine, endLine, EVERY_CATEGORY, heldByRecipe, noMatchSentence, recipeHeadingId, searchable, sortOf, tooShort, useRecipeGallery } from './recipeGallery'
 import RecipeGalleryBar from './RecipeGalleryBar.vue'
 import RecipeGalleryEmpty from './RecipeGalleryEmpty.vue'
 import RecipeGalleryList from './RecipeGalleryList.vue'
@@ -20,12 +20,12 @@ const router = useRouter()
 
 const { device, settled, back } = useCarriedDevice()
 
-function holdInAddress(changes: { q?: string, category?: string, sort?: string }) {
+function holdInAddress(changes: { q?: string, category?: string, sort?: string, author?: string }) {
   void router.replace({ query: { ...route.query, ...changes } })
 }
 
 const sought = computed(() => typeof route.query.q === 'string' ? searchable(route.query.q) : '')
-const view = computed<GalleryView>(() => ({ search: sought.value, category: categoryOf(route.query.category), sort: sortOf(route.query.sort) }))
+const view = computed<GalleryView>(() => ({ search: sought.value, category: categoryOf(route.query.category), author: authorOf(route.query.author), sort: sortOf(route.query.sort) }))
 
 const category = computed<string>({
   get: () => view.value.category ?? EVERY_CATEGORY,
@@ -43,7 +43,7 @@ const { typed, clear: clearSearch } = useSearchInAddress({ sought: () => sought.
 
 function showEvery() {
   clearSearch()
-  holdInAddress({ q: undefined, category: undefined })
+  holdInAddress({ q: undefined, category: undefined, author: undefined })
 }
 
 const gallery = useRecipeGallery(() => view.value)
@@ -74,6 +74,12 @@ async function showMore() {
     <template v-if="device">
       It is assigned to {{ device.name }} as soon as it exists, at the end of the Order.
     </template>
+  </p>
+  <p v-if="view.author" class="by-author">
+    <span>Showing the Recipes of one author.</span>
+    <button type="button" class="every-author" @click="holdInAddress({ author: undefined })">
+      Show every author
+    </button>
   </p>
   <RecipeGalleryBar v-model:search="typed" v-model:category="category" v-model:sort="sort" :categories="categoryChoices" :too-short="tooShort(typed)" />
   <Notice
@@ -111,6 +117,17 @@ async function showMore() {
     max-width: var(--measure);
     margin-top: calc(-1 * var(--space-2));
     color: var(--color-ink-soft);
+  }
+
+  .by-author {
+    margin-bottom: var(--space-3);
+    font-weight: var(--weight-medium);
+  }
+
+  .every-author {
+    margin-left: var(--space-2);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   .gallery-notice {

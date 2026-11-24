@@ -44,6 +44,8 @@ export class RecipeGalleryService {
     const search = trmnlSearchOf(query)
     if (search)
       url.searchParams.set('search', search)
+    if (query.author)
+      url.searchParams.set('user_id', query.author)
     url.searchParams.set('sort-by', query.sort ?? 'install')
     url.searchParams.set('per_page', String(RECIPE_GALLERY_PAGE_SIZE))
     url.searchParams.set('page', String(query.page ?? 1))

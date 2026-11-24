@@ -1,4 +1,4 @@
-import type { PluginDetail, PluginFieldRead, PluginImportResult, PluginPlace, PluginSummary, PreviewData, RecipeGalleryPage, RecipeSummary, RecipeUpdatePreview, UpdateItem } from 'kuroshiro-shared'
+import type { PluginDetail, PluginFieldRead, PluginImportResult, PluginPlace, PluginSummary, PreviewData, RecipeDetail, RecipeGalleryPage, RecipeSummary, RecipeUpdatePreview, UpdateItem } from 'kuroshiro-shared'
 import { defineBuilder } from './defineBuilder'
 
 export const buildPluginPlace = defineBuilder<PluginPlace>(() => ({
@@ -142,6 +142,7 @@ export const buildRecipeSummary = defineBuilder<RecipeSummary>(() => ({
   screenshotUrl: 'https://trmnl-public.s3.us-east-2.amazonaws.com/moon-phase',
   recipeUrl: 'https://trmnl.com/recipes/moon-phase-41120',
   installs: 2140,
+  userId: '23360',
 }))
 
 export const buildRecipeGalleryPage = defineBuilder<RecipeGalleryPage>(() => ({
@@ -150,4 +151,17 @@ export const buildRecipeGalleryPage = defineBuilder<RecipeGalleryPage>(() => ({
   page: 1,
   perPage: 25,
   hasMore: false,
+}))
+
+export const buildRecipeDetail = defineBuilder<RecipeDetail>(() => ({
+  id: '41120',
+  name: 'Moon Phase',
+  description: 'Tonight\'s phase of the Moon, with moonrise and moonset',
+  authorBio: 'I draw the sky for a living and the Moon is my favourite part of it.',
+  fields: [
+    { keyname: 'city', name: 'City', fieldType: 'string', description: 'Where you watch the sky from', required: true },
+    { keyname: 'units', name: 'Units', fieldType: 'select', description: null, required: false },
+  ],
+  hosts: ['api.farmsense.net'],
+  refusal: null,
 }))

@@ -1,4 +1,4 @@
-import type { DataSourceMethod, MergeStrategy, PluginFieldAttributes, PluginFieldOption, PluginKind } from 'kuroshiro-shared'
+import type { DataSourceMethod, MergeStrategy, PluginFieldAttributes, PluginFieldOption, PluginKind, RecipeRefusal } from 'kuroshiro-shared'
 import type { JsonObject } from '../../utils/json.js'
 import type { OAuthSettings } from '../plugin-oauth.js'
 import { Buffer } from 'node:buffer'
@@ -317,6 +317,13 @@ function typedByHandOf(recipeSettings: RecipeSettings): string[] {
 const selfFetchingDataSource = (transformJs: string): ParsedDataSource => ({ name: 'source', mode: 'literal', literalValue: {}, transformJs })
 
 /** A Plugin read from a Recipe, tied to it by the Recipe's id, with the names of its Plugin Fields typed by hand where TRMNL lists choices. */
+/** A Recipe read without importing it: the Plugin it would become, or the little a refused one still says, and why it is refused. */
+export interface RecipePreview {
+  recipeId: string
+  plugin: Pick<ParsedPlugin, 'name' | 'description' | 'fields' | 'dataSources'>
+  refusal: RecipeRefusal | null
+}
+
 export type RecipePlugin = ParsedPlugin & { sourceRecipeId: string, typedByHand: string[] }
 
 /** What a Recipe import keeps as the Recipe Snapshot: the Plugin as read, without what only the import's answer reports. */
@@ -497,17 +504,58 @@ export class PluginImporterService {
   }
 
   async importFromRecipe(recipeIdOrUrl: string): Promise<RecipePlugin> {
+    const { archive, recipeId } = await this.downloadRecipe(recipeIdOrUrl)
+    this.logger.log(`Importing plugin from TRMNL Recipe: ${recipeId}`)
+    return this.importFromRecipeArchive(archive, recipeId)
+  }
+
+  private async downloadRecipe(recipeIdOrUrl: string): Promise<{ archive: Buffer, recipeId: string }> {
     const recipeId = recipeIdOf(recipeIdOrUrl)
     if (!recipeId) {
       throw new ApiException(HttpStatus.BAD_REQUEST, 'recipe-id-invalid', 'A Recipe is named by its id or by an address holding recipes/{id}.')
     }
-    this.logger.log(`Importing plugin from TRMNL Recipe: ${recipeId}`)
-
     const archive = await this.download(`https://trmnl.com/api/plugin_settings/${recipeId}/archive`, 'TRMNL')
     if (!archive) {
       throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'recipe-not-found', `TRMNL has no Recipe ${recipeId}.`, { id: recipeId })
     }
-    return this.importFromRecipeArchive(archive, recipeId)
+    return { archive, recipeId }
+  }
+
+  /**
+   * What a Recipe is before it is imported: its archive read as the import reads it, nothing saved. A Recipe the
+   * import would refuse for what it contains is still described, from its settings, with the import's own refusal.
+   * Not answering, and a body that is no Recipe archive, are refused as the import refuses them.
+   */
+  async previewRecipe(recipeIdOrUrl: string): Promise<RecipePreview> {
+    const { archive, recipeId } = await this.downloadRecipe(recipeIdOrUrl)
+    try {
+      return { recipeId, plugin: await this.importFromRecipeArchive(archive, recipeId), refusal: null }
+    }
+    catch (error) {
+      if (!(error instanceof ApiException) || error.getStatus() !== HttpStatus.UNPROCESSABLE_ENTITY) {
+        throw error
+      }
+      const settings = openZip(archive)?.getEntry('settings.yml')?.getData().toString('utf8')
+      return { recipeId, plugin: this.describeRefusedRecipe(settings ?? ''), refusal: { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) } }
+    }
+  }
+
+  // The few things a refused Recipe's settings.yml can still say, without the checks that refused it.
+  private describeRefusedRecipe(settingsContent: string): Pick<ParsedPlugin, 'name' | 'description' | 'fields' | 'dataSources'> {
+    const settings = parseYamlObject<RecipeSettings>(settingsContent, 'Invalid settings.yml')
+    let dataSources: ParsedDataSource[] = []
+    try {
+      dataSources = this.resolveDataSources(settings)
+    }
+    catch {
+      // Its Data Sources cannot be read either: the page lists no hosts.
+    }
+    return {
+      name: settings.name?.trim() || 'Untitled Recipe',
+      description: settings.description?.trim(),
+      fields: this.resolveFields({ name: settings.name, description: settings.description, custom_fields: Array.isArray(settings.custom_fields) ? settings.custom_fields : undefined }, settings),
+      dataSources,
+    }
   }
 
   async importFromRecipeArchive(archiveBuffer: Buffer, recipeId: string): Promise<RecipePlugin> {

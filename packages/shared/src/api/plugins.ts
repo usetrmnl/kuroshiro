@@ -1,4 +1,5 @@
 import type { DataSourceLiteralValue, DataSourceMode } from '../data-source.ts'
+import type { ApiErrorCode } from './errors.ts'
 import type { ScreenState, TemplateSize } from './screens.ts'
 
 export const PLUGIN_KINDS = ['Poll', 'Webhook'] as const
@@ -421,10 +422,15 @@ export const RECIPE_GALLERY_PAGE_SIZE = 25
 /** A category is one of TRMNL's slugs, as `GET /api/recipes/categories` lists them. */
 export const RECIPE_CATEGORY_PATTERN = /^[a-z0-9_-]+$/
 
+/** A TRMNL author is named by their numeric `user_id`, which the Gallery's `author` filter passes on as TRMNL's `user_id`. */
+export const RECIPE_AUTHOR_PATTERN = /^\d{1,12}$/
+
 export interface RecipeGalleryQuery {
   /** Matched on TRMNL's side; under `RECIPE_SEARCH_MIN_LENGTH` characters it is no search. */
   search?: string
   category?: string
+  /** Only the Recipes of this author, by `RecipeSummary.userId`. */
+  author?: string
   /** `install` when absent. */
   sort?: RecipeSort
   /** From 1, which it is when absent. */
@@ -444,6 +450,43 @@ export interface RecipeSummary {
   /** The Recipe's page on trmnl.com. */
   recipeUrl: string | null
   installs: number
+  /** TRMNL's id of the Recipe's author, which "More by this author" filters on; their name and address are not carried. */
+  userId: string | null
+}
+
+/** One Plugin Field a Recipe asks for. */
+export interface RecipeFieldPreview {
+  keyname: string
+  name: string
+  fieldType: string
+  description: string | null
+  required: boolean
+}
+
+/** What importing a Recipe would refuse, in the import's own code and wording. */
+export interface RecipeRefusal {
+  code: ApiErrorCode
+  message: string
+  /** What the refusal says beyond its code, such as the strategy: what its wording is made from. */
+  details?: Record<string, unknown>
+}
+
+/**
+ * A Recipe as its archive describes it, read without importing anything (`GET /api/recipes/:id`). What only TRMNL's
+ * list carries (screenshot, install count, author id) is not here.
+ */
+export interface RecipeDetail {
+  id: string
+  name: string
+  description: string | null
+  /** The text of the Recipe's `author_bio` field, which is all the archive says of its author. */
+  authorBio: string | null
+  /** The Plugin Fields the import would ask for; a field only shown (the author's text, a webhook address) is left out. */
+  fields: RecipeFieldPreview[]
+  /** The hosts its Data Sources call, without duplicates, in the order they are first named. */
+  hosts: string[]
+  /** `null` when the import would go through. */
+  refusal: RecipeRefusal | null
 }
 
 /** One page of the Recipe Gallery. */
