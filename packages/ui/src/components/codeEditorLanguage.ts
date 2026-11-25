@@ -1,3 +1,4 @@
+import type { CompletionContext, CompletionSource } from '@codemirror/autocomplete'
 import type { Extension } from '@codemirror/state'
 import type { DecorationSet, EditorView, ViewUpdate } from '@codemirror/view'
 import type { FilterCompletion } from './codeCompletion'
@@ -6,16 +7,18 @@ import { autocompletion, completeFromList } from '@codemirror/autocomplete'
 import { html } from '@codemirror/lang-html'
 import { javascriptLanguage } from '@codemirror/lang-javascript'
 import { json } from '@codemirror/lang-json'
-import { liquid } from '@codemirror/lang-liquid'
-import { syntaxTree } from '@codemirror/language'
+import { closePercentBrace, liquidCompletionSource, liquidLanguage } from '@codemirror/lang-liquid'
+import { LanguageSupport, syntaxTree } from '@codemirror/language'
 import { RangeSetBuilder } from '@codemirror/state'
 import { Decoration, ViewPlugin } from '@codemirror/view'
-import { keysUnder, namesOf } from './codeCompletion'
+import { definedTemplatesIn, keysUnder, namesOf, tagAskOf } from './codeCompletion'
 
 /** What Liquid completion reads: the preview's data and the filters the dialect adds, each with the dialect that did. */
 export interface LiquidCompletion {
   data: Record<string, unknown>
   filters: readonly FilterCompletion[]
+  /** The tags the engine renders; without them completion offers the language's own list. */
+  tags?: readonly string[]
 }
 
 const LIQUID_NODES = ['Interpolation', 'Tag', 'EndTag', 'Comment']
@@ -61,18 +64,44 @@ export function completionOf(mode: CodeEditorMode): Extension {
   return autocompletion({ icons: false, override: mode === 'javascript' ? [completeFromList(JAVASCRIPT_KEYWORDS)] : undefined })
 }
 
-export function languageOf(mode: CodeEditorMode, { data, filters }: LiquidCompletion): Extension {
-  if (mode === 'liquid') {
-    return [
-      liquid({
-        base: html(),
-        variables: namesOf(data).map(name => ({ ...name, type: 'variable' })),
-        filters: filters.map(({ label, dialect }) => ({ label, type: 'function', detail: dialect })),
-        properties: path => keysUnder(data, path).map(key => ({ ...key, type: 'property' })),
-      }),
-      liquidWash,
-    ]
+/**
+ * After `{%` the engine's tags, and after `{% render "` the names defined above the cursor, in place of the language's
+ * tags (which cannot be pruned, only added to); everything else is the language's completion.
+ */
+function liquidSource(stock: CompletionSource, tags: readonly string[]): CompletionSource {
+  const tagOptions = tags.map(label => ({ label, type: 'keyword' }))
+  return (context: CompletionContext) => {
+    const before = context.state.sliceDoc(0, context.pos)
+    const ask = tagAskOf(before)
+    if (!ask)
+      return stock(context)
+    const from = context.pos - ask.typed.length
+    if (ask.kind === 'tag') {
+      return context.explicit || ask.typed ? { from, options: tagOptions, validFor: /^\w*$/ } : null
+    }
+    const options = definedTemplatesIn(before.slice(0, from)).map(label => ({ label, type: 'variable' }))
+    return options.length ? { from, options, validFor: /^[\w/]*$/ } : null
   }
+}
+
+function liquidLanguageOf({ data, filters, tags }: LiquidCompletion): Extension {
+  const stock = liquidCompletionSource({
+    variables: namesOf(data).map(name => ({ ...name, type: 'variable' })),
+    filters: filters.map(({ label, dialect }) => ({ label, type: 'function', detail: dialect })),
+    properties: path => keysUnder(data, path).map(key => ({ ...key, type: 'property' })),
+  })
+  const base = html()
+  return new LanguageSupport(liquidLanguage, [
+    base.support,
+    liquidLanguage.data.of({ autocomplete: tags ? liquidSource(stock, tags) : stock }),
+    base.language.data.of({ closeBrackets: { brackets: ['{'] } }),
+    closePercentBrace,
+  ])
+}
+
+export function languageOf(mode: CodeEditorMode, completion: LiquidCompletion): Extension {
+  if (mode === 'liquid')
+    return [liquidLanguageOf(completion), liquidWash]
   if (mode === 'html')
     return html()
   return mode === 'javascript' ? javascriptLanguage : json()
