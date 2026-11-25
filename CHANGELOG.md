@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.26.0](https://github.com/usetrmnl/kuroshiro/compare/kuroshiro-v0.25.0...kuroshiro-v0.26.0) (2026-11-25)
+
+
+### Features
+
+* an optional admin password for the admin UI and API ([#1809](https://github.com/usetrmnl/kuroshiro/issues/1809)) ([1d6ce33](https://github.com/usetrmnl/kuroshiro/commit/1d6ce337a4e89cacc23c9a26593c6c49e265a29b))
+* **api,ui:** a Recipe's own page in the Recipe Gallery, with "More by this author" ([#1808](https://github.com/usetrmnl/kuroshiro/issues/1808)) ([ea02a9c](https://github.com/usetrmnl/kuroshiro/commit/ea02a9ca8d1004d947df456ba8686b8844a56c9c))
+* **api:** ship the TRMNL Frame in the bundled Device Model snapshot ([#1802](https://github.com/usetrmnl/kuroshiro/issues/1802)) ([c295ac1](https://github.com/usetrmnl/kuroshiro/commit/c295ac140df56b0c4ec0360b4e9fcd2ac62ff3ab))
+* **ui:** the Template editor completes the tags Kuroshiro renders and a Template's own partial names ([#1807](https://github.com/usetrmnl/kuroshiro/issues/1807)) ([c139098](https://github.com/usetrmnl/kuroshiro/commit/c139098b6bc14b19364593b5564ff913ad619abe))
+
 ## [0.25.0](https://github.com/usetrmnl/kuroshiro/compare/kuroshiro-v0.24.0...kuroshiro-v0.25.0) (2026-11-15)
 
 
