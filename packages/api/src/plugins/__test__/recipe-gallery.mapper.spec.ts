@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toRecipeGalleryPage, toRecipeSummary } from '../recipe-gallery.mapper.js'
+import { toRecipeDetail, toRecipeGalleryPage, toRecipeSummary } from '../recipe-gallery.mapper.js'
 
 /** One entry of `GET trmnl.com/recipes.json` as it answered on 2026-11-10, `custom_fields` trimmed. */
 const LINES = {
@@ -28,6 +28,7 @@ describe('the Recipe summary read model', () => {
       screenshotUrl: 'https://trmnl-public.s3.us-east-2.amazonaws.com/mdv0h9x7a4b2trzuo7xh6gp5utv2',
       recipeUrl: 'https://trmnl.com/recipes/lines-377363',
       installs: 66,
+      userId: '23360',
     })
   })
 
@@ -41,6 +42,7 @@ describe('the Recipe summary read model', () => {
       screenshotUrl: null,
       recipeUrl: null,
       installs: 0,
+      userId: null,
     })
   })
 
@@ -64,5 +66,40 @@ describe('the Recipe Gallery page read model', () => {
   it('leaves out an entry without an id or a name', () => {
     const page = toRecipeGalleryPage({ data: [LINES, { name: 'No id' }, { id: 9 }, null], total: 4, per_page: 25, current_page: 1, next_page_url: null })
     expect(page.recipes.map(recipe => recipe.id)).toEqual(['377363'])
+  })
+})
+
+describe('the Recipe detail read model', () => {
+  const plugin = {
+    name: 'Lines',
+    description: ' Time or Weather ',
+    fields: [
+      { keyname: 'about', fieldType: 'author_bio', name: 'About', description: 'Made by someone.', required: false, order: 1 },
+      { keyname: 'city', fieldType: 'string', name: 'City', description: 'Where', required: true, order: 2 },
+      { keyname: 'hook', fieldType: 'copyable_webhook_url', name: 'Hook', required: false, order: 3 },
+    ],
+    dataSources: [
+      { name: 'a', mode: 'fetch' as const, url: 'https://api.example.com/a?key=1' },
+      { name: 'b', mode: 'fetch' as const, url: 'https://api.example.com/b' },
+      { name: 'c', mode: 'fetch' as const, url: '{{ base }}/c' },
+      { name: 'd', mode: 'literal' as const },
+    ],
+  }
+
+  it('answers the author\'s text, the asked fields and the hosts called once each', () => {
+    expect(toRecipeDetail({ recipeId: '7', plugin, refusal: null })).toEqual({
+      id: '7',
+      name: 'Lines',
+      description: 'Time or Weather',
+      authorBio: 'Made by someone.',
+      fields: [{ keyname: 'city', name: 'City', fieldType: 'string', description: 'Where', required: true }],
+      hosts: ['api.example.com'],
+      refusal: null,
+    })
+  })
+
+  it('carries the refusal the import would give', () => {
+    const refusal = { code: 'recipe-strategy-unsupported' as const, message: 'No.', details: null }
+    expect(toRecipeDetail({ recipeId: '7', plugin, refusal }).refusal).toEqual(refusal)
   })
 })

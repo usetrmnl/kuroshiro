@@ -12,6 +12,7 @@ const LINES = {
   icon_url: 'https://trmnl-public.s3.us-east-2.amazonaws.com/icon',
   screenshot_url: 'https://trmnl-public.s3.us-east-2.amazonaws.com/shot',
   recipe_url: 'https://trmnl.com/recipes/lines-377363',
+  user_id: 4821,
   stats: { installs: 66, forks: 4 },
 }
 
@@ -61,12 +62,19 @@ describe('the Recipe Gallery', () => {
           screenshotUrl: 'https://trmnl-public.s3.us-east-2.amazonaws.com/shot',
           recipeUrl: 'https://trmnl.com/recipes/lines-377363',
           installs: 66,
+          userId: '4821',
         }],
         total: 8,
         page: 1,
         perPage: 25,
         hasMore: true,
       })
+    })
+
+    it('filters on an author with TRMNL\'s user_id', async () => {
+      await service.page({ author: '4821' })
+
+      expect(askedFor().get('user_id')).toBe('4821')
     })
 
     it('sends the order and the page asked for', async () => {

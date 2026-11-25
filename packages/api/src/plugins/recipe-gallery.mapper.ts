@@ -1,4 +1,6 @@
-import type { RecipeGalleryPage, RecipeSummary } from 'kuroshiro-shared'
+import type { RecipeDetail, RecipeGalleryPage, RecipeSummary } from 'kuroshiro-shared'
+import type { RecipePreview } from './services/plugin-importer.service.js'
+import { isReadOnlyFieldType } from 'kuroshiro-shared'
 import { isPlainObject } from '../utils/json.js'
 
 /** The body of `GET trmnl.com/recipes.json` as far as the Recipe Gallery reads it; anything in it may be missing. */
@@ -56,6 +58,7 @@ function recipeSummaryOrNull(entry: unknown): RecipeSummary | null {
     screenshotUrl: httpsUrlOrNull(entry.screenshot_url),
     recipeUrl: httpsUrlOrNull(entry.recipe_url),
     installs: wholeNumberOr(stats.installs, 0),
+    userId: idOf(entry.user_id),
   }
 }
 
@@ -78,5 +81,31 @@ export function toRecipeGalleryPage(body: TrmnlRecipeList): RecipeGalleryPage {
     page: wholeNumberOr(body.current_page, 1),
     perPage: wholeNumberOr(body.per_page, recipes.length),
     hasMore: textOrNull(body.next_page_url) !== null,
+  }
+}
+
+/** The host of a Data Source's address, or `null` for one that does not start with a host (a Template placeholder, say). */
+function hostOrNull(address: string | undefined): string | null {
+  try {
+    return address ? new URL(address).host || null : null
+  }
+  catch {
+    return null
+  }
+}
+
+/** A read Recipe in Kuroshiro's words. The author's address and anything else in the archive is left out. */
+export function toRecipeDetail({ recipeId, plugin, refusal }: RecipePreview): RecipeDetail {
+  const bio = plugin.fields.find(field => field.fieldType === 'author_bio')
+  return {
+    id: recipeId,
+    name: plugin.name,
+    description: textOrNull(plugin.description),
+    authorBio: textOrNull(bio?.description),
+    fields: plugin.fields
+      .filter(field => !isReadOnlyFieldType(field.fieldType))
+      .map(field => ({ keyname: field.keyname, name: field.name, fieldType: field.fieldType, description: textOrNull(field.description), required: field.required })),
+    hosts: [...new Set(plugin.dataSources.flatMap(source => hostOrNull(source.url) ?? []))],
+    refusal,
   }
 }

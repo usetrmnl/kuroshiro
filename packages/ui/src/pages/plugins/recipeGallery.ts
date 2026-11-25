@@ -1,6 +1,6 @@
 import type { PluginSummary, RecipeGalleryPage, RecipeGalleryQuery, RecipeSort } from 'kuroshiro-shared'
 import type { SelectOption } from '@/components/selectOption'
-import { RECIPE_CATEGORY_PATTERN, RECIPE_SEARCH_MIN_LENGTH, RECIPE_SORTS } from 'kuroshiro-shared'
+import { RECIPE_AUTHOR_PATTERN, RECIPE_CATEGORY_PATTERN, RECIPE_SEARCH_MIN_LENGTH, RECIPE_SORTS } from 'kuroshiro-shared'
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
 import { isRefusal, isUnreachable } from '@/api/client'
 import { listRecipes } from '@/api/plugins'
@@ -12,6 +12,8 @@ export interface GalleryView {
   /** What is searched for: empty, or at least `RECIPE_SEARCH_MIN_LENGTH` characters. */
   search: string
   category?: string
+  /** Only this author's Recipes, by TRMNL's id for them. */
+  author?: string
   sort: RecipeSort
 }
 
@@ -43,11 +45,13 @@ export const searchable = (typed: string) => typed.trim().length >= RECIPE_SEARC
 /** Whether what is typed is too short to search for, which the field's hint then says. */
 export const tooShort = (typed: string) => typed.trim().length > 0 && searchable(typed) === ''
 
-export function galleryQueryOf({ search, category, sort }: GalleryView): RecipeGalleryQuery {
-  return { ...(search ? { search } : {}), ...(category ? { category } : {}), sort }
+export const authorOf = (named: unknown): string | undefined => typeof named === 'string' && RECIPE_AUTHOR_PATTERN.test(named) ? named : undefined
+
+export function galleryQueryOf({ search, category, author, sort }: GalleryView): RecipeGalleryQuery {
+  return { ...(search ? { search } : {}), ...(category ? { category } : {}), ...(author ? { author } : {}), sort }
 }
 
-const filteredBy = ({ search, category }: Pick<GalleryView, 'search' | 'category'>) => search !== '' || category !== undefined
+const filteredBy = ({ search, category, author }: Pick<GalleryView, 'search' | 'category' | 'author'>) => search !== '' || category !== undefined || author !== undefined
 
 export function countLine({ shown, total, filtered, sort }: { shown: number, total: number, filtered: boolean, sort: RecipeSort }) {
   const recipes = filtered
@@ -58,8 +62,8 @@ export function countLine({ shown, total, filtered, sort }: { shown: number, tot
 
 export const endLine = (filtered: boolean) => filtered ? 'That is every Recipe that matches.' : 'That is the whole catalog.'
 
-export function noMatchSentence({ search, category }: Pick<GalleryView, 'search' | 'category'>) {
-  const within = category ? ` in ${categoryLabel(category)}` : ''
+export function noMatchSentence({ search, category, author }: Pick<GalleryView, 'search' | 'category' | 'author'>) {
+  const within = (category ? ` in ${categoryLabel(category)}` : '') + (author ? ' by this author' : '')
   return search ? `No Recipe is called “${search}”${within}.` : `No Recipe is${within}.`
 }
 

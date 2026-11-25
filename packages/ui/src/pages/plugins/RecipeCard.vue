@@ -2,12 +2,14 @@
 import type { PluginSummary, RecipeSummary } from 'kuroshiro-shared'
 import type { CarriedDevice } from './addPlugin'
 import { computed, ref, toRef, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { importRecipe } from '@/api/plugins'
 import Button from '@/components/Button.vue'
 import Icon from '@/components/Icon.vue'
 import Plate from '@/components/Plate.vue'
 import SentenceLine from '@/pages/devices/SentenceLine.vue'
 import { heldFromRecipe, RECIPE_IMPORT_WORDING, useImportPluginOnto } from './importPlugin'
+import { recipePath } from './pluginPaths'
 import { installsLine, recipeHeadingId } from './recipeGallery'
 
 const props = defineProps<{
@@ -30,6 +32,9 @@ function add() {
   return importing.run(deviceId => importRecipe({ recipe: props.recipe.id, deviceId }))
 }
 
+// The card hands its entry on, so the page can show what only the list carries.
+const pageOf = computed(() => ({ path: recipePath(props.recipe.id, props.device?.id), state: { recipe: { ...props.recipe } } }))
+
 const heldLine = computed(() => heldFromRecipe(props.held))
 
 // A screenshot that cannot be loaded leaves the plate's empty look, as one the Recipe does not have.
@@ -41,22 +46,26 @@ watch(() => props.recipe.screenshotUrl, () => {
 
 <template>
   <li class="recipe-card" :aria-labelledby="recipeHeadingId(recipe.id)">
-    <Plate :name="`Screenshot of ${recipe.name}`" :width="800" :height="480">
-      <img
-        v-if="recipe.screenshotUrl && !unloadable"
-        class="screenshot"
-        :src="recipe.screenshotUrl"
-        :alt="`Screenshot of ${recipe.name}`"
-        loading="lazy"
-        decoding="async"
-        referrerpolicy="no-referrer"
-        @error="unloadable = true"
-      >
-      <span v-else />
-    </Plate>
+    <RouterLink class="plate-link" :to="pageOf" tabindex="-1">
+      <Plate :name="`Screenshot of ${recipe.name}`" :width="800" :height="480">
+        <img
+          v-if="recipe.screenshotUrl && !unloadable"
+          class="screenshot"
+          :src="recipe.screenshotUrl"
+          :alt="`Screenshot of ${recipe.name}`"
+          loading="lazy"
+          decoding="async"
+          referrerpolicy="no-referrer"
+          @error="unloadable = true"
+        >
+        <span v-else />
+      </Plate>
+    </RouterLink>
     <div class="body">
       <h2 :id="recipeHeadingId(recipe.id)" class="name" tabindex="-1">
-        {{ recipe.name }}
+        <RouterLink class="name-link" :to="pageOf">
+          {{ recipe.name }}
+        </RouterLink>
       </h2>
       <p v-if="recipe.description" class="description">
         {{ recipe.description }}
@@ -98,6 +107,20 @@ watch(() => props.recipe.screenshotUrl, () => {
     flex-direction: column;
     gap: var(--space-3);
     min-width: 0;
+  }
+
+  .plate-link {
+    display: block;
+  }
+
+  .name-link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .name-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   .screenshot {
