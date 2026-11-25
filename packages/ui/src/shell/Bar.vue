@@ -11,11 +11,17 @@ const props = withDefaults(defineProps<{
   devices: NamedDevice[]
   /** How many Alerts fire. The indicator shows only while one does. */
   firingAlerts?: number
+  /** The Instance has an admin password: show "Sign out". */
+  canSignOut?: boolean
   /** For the gallery: the label of a cut name whose tooltip is held open. */
   tooltipOpenOn?: string
 }>(), {
   firingAlerts: 0,
 })
+
+defineEmits<{
+  signOut: []
+}>()
 
 const route = useRoute()
 
@@ -81,6 +87,9 @@ const alertsFiring = computed(() => `${props.firingAlerts} ${props.firingAlerts 
     >
       {{ alertsFiring }}
     </RouterLink>
+    <button v-if="canSignOut" type="button" class="sign-out" :class="{ 'push-end': firingAlerts === 0 }" @click="$emit('signOut')">
+      Sign out
+    </button>
   </header>
 </template>
 
@@ -178,6 +187,27 @@ const alertsFiring = computed(() => `${props.firingAlerts} ${props.firingAlerts 
 
   .alert-indicator[aria-current] {
     border-bottom-color: var(--color-ink);
+  }
+
+  .sign-out {
+    flex: none;
+    align-self: center;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+
+  .sign-out {
+    margin-left: var(--space-5);
+  }
+
+  .sign-out.push-end {
+    margin-left: auto;
   }
 
   .lockup:focus-visible,

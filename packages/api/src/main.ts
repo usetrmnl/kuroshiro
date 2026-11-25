@@ -3,6 +3,8 @@ import { Logger } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { DataSource } from 'typeorm'
 import { AppModule } from './app.module.js'
+import { AdminAuth } from './auth/admin-auth.js'
+import { registerAdminPassword } from './auth/admin-password.guard.js'
 import config, { logUnknownEnvVars } from './config/config.js'
 import { migrationLogger } from './config/migration-logger.js'
 import { registerCrossSiteRefusal } from './cross-site/cross-site.guard.js'
@@ -31,6 +33,7 @@ async function bootstrap() {
   }
   app.setGlobalPrefix('api', { exclude: ['metrics', 'health'] })
   registerErrorEnvelope(app)
+  registerAdminPassword(app, app.get(AdminAuth))
   registerCrossSiteRefusal(app)
   app.useGlobalInterceptors(new LoggingInterceptor())
   // Lets SIGTERM run the modules' destroy hooks, which close the shared render browser rather than orphan it (ADR-0044).

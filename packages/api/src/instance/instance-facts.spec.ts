@@ -8,6 +8,7 @@ const source: InstanceFactsSource = {
   serverUrl: 'http://192.168.1.20:3000',
   timezone: 'Europe/Berlin',
   demoMode: false,
+  adminPasswordSet: false,
   appriseUrl: undefined,
   limits: UPLOAD_LIMITS,
 }
@@ -60,6 +61,7 @@ describe('toInstanceFacts', () => {
       serverUrlIsLoopback: false,
       timezone: 'Europe/Berlin',
       demoMode: false,
+      adminPasswordSet: false,
       notifications: { configured: false, appriseUrl: null },
       limits: UPLOAD_LIMITS,
     })

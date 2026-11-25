@@ -45,7 +45,7 @@ describe('gET /api/instance', () => {
 
   it('answers every key of the Instance facts', async () => {
     const { facts } = await readFacts({ KUROSHIRO_API_URL: 'http://192.168.1.20:3000', KUROSHIRO_DEMO_MODE: 'true' })
-    expect(Object.keys(facts).sort()).toEqual(['demoMode', 'limits', 'notifications', 'serverUrl', 'serverUrlIsLoopback', 'timezone', 'version'])
+    expect(Object.keys(facts).sort()).toEqual(['adminPasswordSet', 'demoMode', 'limits', 'notifications', 'serverUrl', 'serverUrlIsLoopback', 'timezone', 'version'])
     expect(facts).toMatchObject({
       serverUrl: 'http://192.168.1.20:3000',
       serverUrlIsLoopback: false,

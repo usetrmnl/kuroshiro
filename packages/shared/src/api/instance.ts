@@ -73,9 +73,16 @@ export interface InstanceFacts {
   serverUrlIsLoopback: boolean
   timezone: string
   demoMode: boolean
+  /** Whether `KUROSHIRO_ADMIN_PASSWORD` is set: the admin UI and API ask for it. */
+  adminPasswordSet: boolean
   notifications: {
     configured: boolean
     appriseUrl: string | null
   }
   limits: InstanceLimits
+}
+
+/** The body of `POST /api/auth/login`. */
+export interface SignInInput {
+  password: string
 }

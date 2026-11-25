@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterView } from 'vue-router'
+import { signOut } from '@/api/auth'
 import { useAlerts, useDevices, useInstanceFacts } from '@/reads/sharedReads'
 import Bar from './Bar.vue'
 import BottomTabs from './BottomTabs.vue'
@@ -10,11 +11,16 @@ const devices = useDevices()
 const alerts = useAlerts()
 
 const listedDevices = computed(() => devices.data ?? [])
+async function leave() {
+  await signOut().catch(() => undefined)
+  window.location.reload()
+}
+
 const firingAlerts = computed(() => alerts.data?.active.length ?? 0)
 </script>
 
 <template>
-  <Bar class="bar-place" :devices="listedDevices" :firing-alerts="firingAlerts" />
+  <Bar class="bar-place" :devices="listedDevices" :firing-alerts="firingAlerts" :can-sign-out="instanceFacts.data?.adminPasswordSet" @sign-out="leave" />
   <p v-if="instanceFacts.data?.demoMode" class="demo-line">
     This is the Kuroshiro demo. Image uploads are off, and anyone can change what you see here.
   </p>

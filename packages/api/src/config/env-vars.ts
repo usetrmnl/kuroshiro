@@ -1,6 +1,7 @@
 export const ENV_VARS = {
   port: 'KUROSHIRO_PORT',
   apiUrl: 'KUROSHIRO_API_URL',
+  adminPassword: 'KUROSHIRO_ADMIN_PASSWORD',
   demoMode: 'KUROSHIRO_DEMO_MODE',
   dbHost: 'KUROSHIRO_DB_HOST',
   dbPort: 'KUROSHIRO_DB_PORT',

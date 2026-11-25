@@ -84,6 +84,7 @@ export default () => {
   return {
     port: Number.parseInt(process.env[ENV_VARS.port] || '', 10) || 3000,
     api_url: process.env[ENV_VARS.apiUrl] || 'http://localhost:5173',
+    admin_password: process.env[ENV_VARS.adminPassword] || undefined,
     demo_mode: process.env[ENV_VARS.demoMode] === 'true' || false,
     render_allowed_hosts: parseHostListEnv(ENV_VARS.renderAllowedHosts),
     database: {

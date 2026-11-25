@@ -20,6 +20,7 @@ export class InstanceController {
       serverUrl: this.configService.getOrThrow<string>('api_url'),
       timezone: this.instanceTimeZone.name,
       demoMode: this.configService.getOrThrow<boolean>('demo_mode'),
+      adminPasswordSet: !!this.configService.get<string>('admin_password'),
       appriseUrl: this.configService.get<{ appriseUrl?: string }>('alerts')?.appriseUrl,
       limits: UPLOAD_LIMITS,
     })

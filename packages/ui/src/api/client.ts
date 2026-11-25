@@ -1,6 +1,10 @@
 import type { ApiError, ApiErrorCode, ApiErrorField } from 'kuroshiro-shared'
 import { imagePathOf } from 'kuroshiro-shared'
+import { ref } from 'vue'
 import { wordRefusal } from './refusalWording'
+
+/** Set once the admin API has answered `sign-in-required`: the Instance has an admin password and the browser has not signed in to it. */
+export const signInRequired = ref(false)
 
 /**
  * The server answered and said no. `message` is the sentence the admin reads, worded from
@@ -85,7 +89,12 @@ async function answerOf<T>(response: Response): Promise<T> {
   const body: unknown = await response.json().catch(() => undefined)
   if (response.ok && body !== undefined)
     return body as T
-  throw isApiError(body) ? new ApiRefusal(body) : new ServerUnreachable()
+  if (!isApiError(body))
+    throw new ServerUnreachable()
+  const refusal = new ApiRefusal(body)
+  if (refusal.code === 'sign-in-required')
+    signInRequired.value = true
+  throw refusal
 }
 
 function sent(address: URL, init: RequestInit): Promise<Response> {
