@@ -35,8 +35,8 @@ const timeZone = useServerTimezone()
 
 /** What the preview is drawn with and for, beside the form: the Liquid engine, fetched apart from the page, and the Device Models with their Palettes. */
 async function loadEngine() {
-  const { checkTemplate, KUROSHIRO_FILTERS, TRMNL_FILTERS, previewOf } = await import('./templatePreview')
-  return { checkTemplate, filters: [...filtersOf('TRMNL', TRMNL_FILTERS), ...filtersOf('Kuroshiro', KUROSHIRO_FILTERS)], previewOf }
+  const { checkTemplate, KUROSHIRO_FILTERS, KUROSHIRO_TAGS, TRMNL_FILTERS, previewOf } = await import('./templatePreview')
+  return { checkTemplate, tags: KUROSHIRO_TAGS, filters: [...filtersOf('TRMNL', TRMNL_FILTERS), ...filtersOf('Kuroshiro', KUROSHIRO_FILTERS)], previewOf }
 }
 
 const needs = useLoad(async () => {
@@ -47,6 +47,7 @@ const needs = useLoad(async () => {
 const part = usePluginFormPart(templatesPart(() => needs.data?.checkTemplate), reveal)
 
 const chosen = ref<TemplateSize>('full')
+const dialectTags = computed(() => needs.data?.tags)
 const rows = computed(() => part.draft.rows)
 const paths = computed(() => templatePaths(rows.value))
 const chosenIndex = computed(() => Math.max(0, rows.value.findIndex(row => row.size === chosen.value)))
@@ -246,6 +247,7 @@ async function reveal(problemPath: string) {
           :problem="problem"
           :completion-data="completionData"
           :dialect-filters="needs.data?.filters"
+          :dialect-tags="dialectTags"
           @save="save"
         />
       </template>

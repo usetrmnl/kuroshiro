@@ -598,12 +598,14 @@ function add() {
 
 ### The Recipe Gallery
 
-`/plugins/recipes` ([plugins.md, "The Recipe Gallery"](../ui/plugins.md#the-recipe-gallery), ADR-0073) is `RecipeGalleryPage.vue`: TRMNL's published Recipes, read through Kuroshiro's own `GET /api/recipes` (`listRecipes(query)`) and `GET /api/recipes/categories` (`listRecipeCategories()`), since `recipes.json` sends the browser no CORS header. The address holds `?q=`, `?category=`, `?sort=` (left out for installs) and `?device=`, never the page reached by paging.
+`/plugins/recipes` ([plugins.md, "The Recipe Gallery"](../ui/plugins.md#the-recipe-gallery), ADR-0073) is `RecipeGalleryPage.vue`: TRMNL's published Recipes, read through Kuroshiro's own `GET /api/recipes` (`listRecipes(query)`) and `GET /api/recipes/categories` (`listRecipeCategories()`), since `recipes.json` sends the browser no CORS header. The address holds `?q=`, `?category=`, `?author=` (a TRMNL `user_id`, set by "More by this author"), `?sort=` (left out for installs) and `?device=`, never the page reached by paging.
 
 | File | Holds |
 | --- | --- |
 | `recipeGallery.ts` | `useRecipeGallery(view)`: the first 25 for a view with `useLoad`, keyed by it, and `loadMore()`, which appends the next page and answers the id of its first new Recipe for the focus; what was appended or failed is dropped once another first page has taken its place. Beside it, with a node spec, the pure words: the count line, the end line, nothing matching, the orders, the categories as options, the notice of a failed load (`upstream-unreachable`, `upstream-busy`, the server not answering) |
 | `RecipeGalleryBar.vue` | The search with its "three characters" hint, the Category select (left out without categories) and the Order select |
+| `RecipePage.vue` | `/plugins/recipes/:recipeId`: one Recipe drawn from its archive through `getRecipe(id)` (`GET /api/recipes/:id`, nothing saved), with the Gallery card's entry handed on in history state (`recipePage.ts`) for the screenshot, icon, install count and `user_id`; a refusal is worded as the import words it and withholds "Import"; carries `?device=` |
+| `RecipeSections.vue`, `RecipeAuthor.vue` | The page's Plugin Fields, Data Source hosts and author sections; the author's "More by this author" link shows only when the `user_id` is known |
 | `RecipeCard.vue` | One `li`, named by its heading: the screenshot in a `Plate` as an `img` of its own (`loading="lazy"`, `referrerpolicy="no-referrer"`, removed when it cannot load), the words, "You already have …", the refusal, "Import" (`useImportPluginOnto`) and "On trmnl.com" |
 | `RecipeGalleryList.vue`, `RecipeGrid.vue`, `RecipeGalleryEmpty.vue`, `RecipeGalleryLoading.vue` | The count line, the grid and "More Recipes"; the grid both share; the two empty states; the six rendering cards |
 

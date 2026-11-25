@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { checkTemplate, createLiquidEngine, KUROSHIRO_FILTERS, LIQUID_LIMITS, renderLiquid, templateProblemOf, TRMNL_FILTERS } from '../liquid.ts'
+import { checkTemplate, createLiquidEngine, KUROSHIRO_FILTERS, KUROSHIRO_TAGS, LIQUID_LIMITS, renderLiquid, templateProblemOf, TRMNL_FILTERS } from '../liquid.ts'
 
 describe('kuroshiro liquid filters', () => {
   it('date_short formats dates', async () => {
@@ -558,5 +558,48 @@ describe('rendering in a given time zone', () => {
   it('keeps the process zone when none is given', async () => {
     const zone = new Intl.DateTimeFormat().resolvedOptions().timeZone
     expect(await renderLiquid('{{ at | date: "%H:%M" }}', instant)).toBe(await renderLiquid('{{ at | date: "%H:%M" }}', instant, { timeZone: zone }))
+  })
+})
+
+describe('the tags the editor completes', () => {
+  const opened = KUROSHIRO_TAGS.filter(tag => !tag.startsWith('end') && !['else', 'elsif', 'when', 'break', 'continue'].includes(tag))
+  const SAMPLES: Record<string, string> = {
+    assign: 'assign a = 1',
+    capture: 'capture a',
+    case: 'case a',
+    comment: 'comment',
+    cycle: 'cycle "a", "b"',
+    decrement: 'decrement a',
+    echo: 'echo a',
+    for: 'for a in b',
+    if: 'if a',
+    increment: 'increment a',
+    liquid: 'liquid\necho a\n',
+    raw: 'raw',
+    render: 'render "a"',
+    tablerow: 'tablerow a in b',
+    template: 'template a',
+    unless: 'unless a',
+  }
+
+  it('parses every tag it offers', () => {
+    expect(Object.keys(SAMPLES).sort()).toEqual([...opened].sort())
+    for (const tag of opened) {
+      const closer = KUROSHIRO_TAGS.includes(`end${tag}`) ? `{% end${tag} %}` : ''
+      expect(checkTemplate(`{% ${SAMPLES[tag]} %}${closer}`), tag).toBeNull()
+    }
+    expect(checkTemplate('{% if a %}{% elsif b %}{% else %}{% endif %}{% case a %}{% when 1 %}{% endcase %}{% for a in b %}{% break %}{% continue %}{% endfor %}')).toBeNull()
+  })
+
+  it('offers each tag once and every closer with its opener', () => {
+    expect(new Set(KUROSHIRO_TAGS).size).toBe(KUROSHIRO_TAGS.length)
+    KUROSHIRO_TAGS.filter(tag => tag.startsWith('end')).forEach(tag => expect(KUROSHIRO_TAGS).toContain(tag.slice(3)))
+  })
+
+  it('leaves out the stock tags the engine refuses', async () => {
+    for (const tag of ['include', 'layout', 'section', 'paginate'])
+      expect(KUROSHIRO_TAGS).not.toContain(tag)
+    await expect(renderLiquid('{% include "a" %}', {})).rejects.toThrow()
+    await expect(renderLiquid('{% layout "a" %}', {})).rejects.toThrow()
   })
 })

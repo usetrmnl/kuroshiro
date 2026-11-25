@@ -1,4 +1,4 @@
-import type { ApplyRecipeUpdateInput, CreatePluginInput, ImportGithubPluginInput, ImportRecipeInput, PluginDetail, PluginImportResult, PluginSummary, PreviewData, PreviewDataInput, RecipeGalleryPage, RecipeGalleryQuery, RecipeUpdatePreview, UpdatePluginInput } from 'kuroshiro-shared'
+import type { ApplyRecipeUpdateInput, CreatePluginInput, ImportGithubPluginInput, ImportRecipeInput, PluginDetail, PluginImportResult, PluginSummary, PreviewData, PreviewDataInput, RecipeDetail, RecipeGalleryPage, RecipeGalleryQuery, RecipeUpdatePreview, UpdatePluginInput } from 'kuroshiro-shared'
 import { apiDownloadChecked, apiGet, apiSend } from './client'
 
 /** Every Plugin as a row of the list, by name whatever its case. */
@@ -33,6 +33,14 @@ export function importRecipe(input: ImportRecipeInput) {
  */
 export function listRecipes(query: RecipeGalleryQuery) {
   return apiGet<RecipeGalleryPage>('recipes', { ...query })
+}
+
+/**
+ * One Recipe as its archive describes it; nothing is imported. A Recipe the import would refuse is still answered, with
+ * `refusal`. Refused with `recipe-id-invalid`, `recipe-not-found` and `upstream-unreachable`, as the import is.
+ */
+export function getRecipe(recipeId: string) {
+  return apiGet<RecipeDetail>(`recipes/${encodeURIComponent(recipeId)}`)
 }
 
 /** TRMNL's Recipe category slugs; none when trmnl.com could not be asked. */
